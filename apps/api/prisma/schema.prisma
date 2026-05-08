@@ -1,0 +1,360 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ORGANIZATIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Organization {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String   @db.Text
+  slug      String   @unique @db.Text
+  ownerId   String   @map("owner_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  members        OrganizationMember[]
+  invitations    OrganizationInvitation[]
+  profiles       Profile[]
+  clients        Client[]
+  invoices       Invoice[]
+  invoiceItems   InvoiceItem[]
+  inventoryItems InventoryItem[]
+  notifications  Notification[]
+  purchaseOrders PurchaseOrder[]
+  orgBooks       OrgBook[]
+  orgClients     OrgClient[]
+
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId     String   @map("org_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  role      String   @db.Text
+  invitedBy String?  @map("invited_by") @db.Uuid
+  status    String   @default("active") @db.Text
+  joinedAt  DateTime @default(now()) @map("joined_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId])
+  @@map("organization_members")
+}
+
+model OrganizationInvitation {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId     String   @map("org_id") @db.Uuid
+  email     String   @db.Text
+  role      String   @db.Text
+  invitedBy String   @map("invited_by") @db.Uuid
+  token     String   @unique @default(dbgenerated("encode(gen_random_bytes(32), 'hex')")) @db.Text
+  status    String?  @default("pending") @db.Text
+  expiresAt DateTime @default(dbgenerated("NOW() + INTERVAL '7 days'")) @map("expires_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@map("organization_invitations")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROFILES  (id = auth.users.id)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Profile {
+  id                String   @id @db.Uuid
+  businessName      String?  @map("business_name") @db.Text
+  businessEmail     String?  @map("business_email") @db.Text
+  businessAddress   String?  @map("business_address") @db.Text
+  businessPhone     String?  @map("business_phone") @db.Text
+  logoUrl           String?  @map("logo_url") @db.Text
+  currency          String?  @default("USD") @db.Text
+  paymentTerms      String?  @default("Net 30") @map("payment_terms") @db.Text
+  invoicePrefix     String?  @default("INV") @map("invoice_prefix") @db.Text
+  nextInvoiceNumber Int?     @default(1001) @map("next_invoice_number")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  signatoryName     String?  @map("signatory_name") @db.Text
+  signatureUrl      String?  @map("signature_url") @db.Text
+  gstin             String?  @db.Text
+  website           String?  @db.Text
+  bankName          String?  @map("bank_name") @db.Text
+  bankAccountNumber String?  @map("bank_account_number") @db.Text
+  bankIfsc          String?  @map("bank_ifsc") @db.Text
+  bankBranch        String?  @map("bank_branch") @db.Text
+  orgId             String?  @map("org_id") @db.Uuid
+
+  organization Organization? @relation(fields: [orgId], references: [id])
+
+  @@map("profiles")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONTACTS  (global contact book, not org-scoped)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Contact {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String   @db.Text
+  email     String?  @db.Text
+  company   String?  @db.Text
+  phone     String?  @db.Text
+  gstin     String?  @db.Text
+  address   String?  @db.Text
+  state     String?  @db.Text
+  stateCode String?  @map("state_code") @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  invoices   Invoice[]
+  orgClients OrgClient[]
+
+  @@map("contacts")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CLIENTS  (org-scoped clients linked to auth.users)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Client {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  name      String   @db.Text
+  email     String?  @db.Text
+  company   String?  @db.Text
+  address   String?  @db.Text
+  phone     String?  @db.Text
+  notes     String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  gstin     String?  @db.Text
+  state     String?  @db.Text
+  stateCode String?  @map("state_code") @db.Text
+  orgId     String?  @map("org_id") @db.Uuid
+
+  organization   Organization?   @relation(fields: [orgId], references: [id])
+  invoices       Invoice[]
+  purchaseOrders PurchaseOrder[]
+
+  @@map("clients")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INVOICES
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Invoice {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  clientId       String?   @map("client_id") @db.Uuid
+  contactId      String?   @map("contact_id") @db.Uuid
+  invoiceNumber  String    @map("invoice_number") @db.Text
+  status         String    @default("draft") @db.Text
+  issueDate      DateTime  @map("issue_date") @db.Date
+  subtotal       Decimal   @default(0) @db.Decimal(12, 2)
+  taxRate        Decimal?  @default(0) @map("tax_rate") @db.Decimal(5, 2)
+  taxAmount      Decimal?  @default(0) @map("tax_amount") @db.Decimal(12, 2)
+  discountAmount Decimal?  @default(0) @map("discount_amount") @db.Decimal(12, 2)
+  total          Decimal   @default(0) @db.Decimal(12, 2)
+  currency       String?   @default("USD") @db.Text
+  notes          String?   @db.Text
+  terms          String?   @db.Text
+  pdfUrl         String?   @map("pdf_url") @db.Text
+  sentAt         DateTime? @map("sent_at") @db.Timestamptz(6)
+  viewedAt       DateTime? @map("viewed_at") @db.Timestamptz(6)
+  paidAt         DateTime? @map("paid_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  supplyType     String?   @default("IGST") @map("supply_type") @db.Text
+  billNumber     String?   @map("bill_number") @db.Text
+  placeOfSupply  String?   @map("place_of_supply") @db.Text
+  orderId        String?   @map("order_id") @db.Text
+  orderDate      DateTime? @map("order_date") @db.Date
+  orgId          String?   @map("org_id") @db.Uuid
+
+  organization  Organization?  @relation(fields: [orgId], references: [id])
+  client        Client?        @relation(fields: [clientId], references: [id])
+  contact       Contact?       @relation(fields: [contactId], references: [id])
+  invoiceItems  InvoiceItem[]
+  notifications Notification[]
+
+  @@map("invoices")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INVOICE ITEMS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model InvoiceItem {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoiceId       String   @map("invoice_id") @db.Uuid
+  description     String   @db.Text
+  quantity        Decimal  @default(1) @db.Decimal(10, 2)
+  unitPrice       Decimal  @default(0) @map("unit_price") @db.Decimal(12, 2)
+  amount          Decimal  @default(0) @db.Decimal(12, 2)
+  sortOrder       Int?     @default(0) @map("sort_order")
+  hsnSac          String?  @default("") @map("hsn_sac") @db.Text
+  gstRate         Decimal? @default(18) @map("gst_rate") @db.Decimal(5, 2)
+  discountPercent Decimal? @default(0) @map("discount_percent") @db.Decimal(5, 2)
+  orgId           String?  @map("org_id") @db.Uuid
+
+  invoice      Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [orgId], references: [id])
+
+  @@map("invoice_items")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BOOKS  (global book catalog — quoted column names)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Book {
+  id              String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookTitle       String                   @map("Book Title") @db.Text
+  isbn            String?                  @map("ISBN") @db.Text
+  productForm     String?                  @map("Product Form") @db.Text
+  language        String?                  @map("Language") @db.Text
+  applicantType   String?                  @map("Applicant Type") @db.Text
+  publisher       String?                  @map("Name of Publishing Agency/Publisher") @db.Text
+  imprint         String?                  @map("Imprint") @db.Text
+  author          String?                  @map("Name of Author/Editor") @db.Text
+  publicationDate String?                  @map("Publication Date") @db.Text
+  createdAt       DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  searchVector    Unsupported("tsvector")? @map("search_vector")
+
+  orgBooks OrgBook[]
+
+  @@map("books")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INVENTORY ITEMS  (org-scoped book catalog with pricing & stock)
+// Note: the DB also has a `"#"` integer column — omitted as it is unaddressable
+// ─────────────────────────────────────────────────────────────────────────────
+
+model InventoryItem {
+  id              String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String?                  @map("user_id") @db.Uuid
+  bookTitle       String                   @map("Book Title") @db.Text
+  isbn            String?                  @map("ISBN") @db.Text
+  productForm     String?                  @map("Product Form") @db.Text
+  language        String?                  @map("Language") @db.Text
+  applicantType   String?                  @map("Applicant Type") @db.Text
+  publisher       String?                  @map("Name of Publishing Agency/Publisher") @db.Text
+  imprint         String?                  @map("Imprint") @db.Text
+  author          String?                  @map("Name of Author/Editor") @db.Text
+  publicationDate String?                  @map("Publication Date") @db.Text
+  price           Decimal?                 @default(0) @db.Decimal(12, 2)
+  gstRate         Decimal?                 @default(0) @map("gst_rate") @db.Decimal(5, 2)
+  stock           Int?                     @default(1)
+  searchVector    Unsupported("tsvector")? @map("search_vector")
+  createdAt       DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  orgId           String?                  @map("org_id") @db.Uuid
+
+  organization Organization? @relation(fields: [orgId], references: [id])
+
+  @@map("inventory_items")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ORG BOOKS  (org's curated list from the global books catalog)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model OrgBook {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId     String   @map("org_id") @db.Uuid
+  bookId    String   @map("book_id") @db.Uuid
+  price     Decimal? @default(0) @db.Decimal(12, 2)
+  gstRate   Decimal? @default(0) @map("gst_rate") @db.Decimal(5, 2)
+  stock     Int?     @default(1)
+  addedBy   String?  @map("added_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  book         Book         @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@map("org_books")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ORG CLIENTS  (org's clients linked from the global contacts table)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model OrgClient {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId     String   @map("org_id") @db.Uuid
+  contactId String   @map("contact_id") @db.Uuid
+  notes     String?  @db.Text
+  addedBy   String?  @map("added_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  contact      Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@map("org_clients")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NOTIFICATIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  orgId     String?  @map("org_id") @db.Uuid
+  type      String   @db.Text
+  title     String   @db.Text
+  message   String   @db.Text
+  invoiceId String?  @map("invoice_id") @db.Uuid
+  isRead    Boolean? @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization? @relation(fields: [orgId], references: [id])
+  invoice      Invoice?      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  userId          String   @id @map("user_id") @db.Uuid
+  invoiceViewed   Boolean? @default(true) @map("invoice_viewed")
+  paymentReceived Boolean? @default(true) @map("payment_received")
+  invoiceOverdue  Boolean? @default(true) @map("invoice_overdue")
+  updatedAt       DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("notification_preferences")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PURCHASE ORDERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model PurchaseOrder {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  orgId        String?  @map("org_id") @db.Uuid
+  orderId      String   @unique @map("order_id") @db.Text
+  clientId     String?  @map("client_id") @db.Uuid
+  clientName   String   @map("client_name") @db.Text
+  itemName     String   @map("item_name") @db.Text
+  quantity     Decimal? @default(1) @db.Decimal(10, 2)
+  unitPrice    Decimal  @default(0) @map("unit_price") @db.Decimal(12, 2)
+  totalAmount  Decimal  @default(0) @map("total_amount") @db.Decimal(12, 2)
+  purchaseDate DateTime @map("purchase_date") @db.Date
+  notes        String?  @db.Text
+  status       String?  @default("completed") @db.Text
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization? @relation(fields: [orgId], references: [id])
+  client       Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  @@map("purchase_orders")
+}

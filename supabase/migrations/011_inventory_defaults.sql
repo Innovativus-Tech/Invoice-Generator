@@ -1,0 +1,3 @@
+ALTER TABLE inventory_items
+  ALTER COLUMN gst_rate SET DEFAULT 0,
+  ALTER COLUMN stock SET DEFAULT 1;
