@@ -184,8 +184,9 @@ export default function SettingsPage() {
       await apiClient.delete(`/org/members/${member.user_id}`);
       toast.success('Member removed.');
       fetchTeam();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error?.message || 'Could not remove member');
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message || 'Could not remove member';
+      toast.error(message);
     }
   };
 
@@ -194,8 +195,9 @@ export default function SettingsPage() {
       await apiClient.patch(`/org/members/${member.user_id}/role`, { role: nextRole });
       toast.success('Role updated.');
       fetchTeam();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error?.message || 'Could not update role');
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message || 'Could not update role';
+      toast.error(message);
     }
   };
 
@@ -204,8 +206,9 @@ export default function SettingsPage() {
       await apiClient.delete(`/org/invitations/${invitation.id}`);
       toast.success('Invitation revoked.');
       fetchTeam();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error?.message || 'Could not revoke invitation');
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message || 'Could not revoke invitation';
+      toast.error(message);
     }
   };
 
