@@ -208,15 +208,14 @@ export function useDownloadPdf() {
 
   return useMutation({
     mutationFn: async ({ id, invoiceNumber }: { id: string; invoiceNumber: string }) => {
-      // 1. Call the API to generate + upload PDF, get back the signed URL
-      const { data } = await apiClient.post(`/invoices/${id}/generate-pdf`);
-      const signedUrl = data.data.pdf_url;
+      // 1. Stream the PDF bytes through the API (avoids browser->storage
+      //    CORS/mixed-content failures with signed URLs on deployments)
+      const response = await apiClient.get(`/invoices/${id}/download-pdf`, {
+        responseType: 'blob',
+      });
+      const blob = new Blob([response.data], { type: 'application/pdf' });
 
-      // 2. Fetch the PDF bytes through the signed URL
-      const response = await fetch(signedUrl);
-      const blob = await response.blob();
-
-      // 3. Trigger browser download
+      // 2. Trigger browser download
       const blobUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = blobUrl;
@@ -232,8 +231,14 @@ export function useDownloadPdf() {
       queryClient.invalidateQueries({ queryKey: invoiceKeys.detail(id) });
       toast.success('PDF downloaded successfully');
     },
-    onError: (err: any) => {
-      toast.error('Failed to download PDF');
+    onError: async (err: any) => {
+      // Error payload is a JSON blob when responseType is 'blob'
+      let message = 'Failed to download PDF';
+      try {
+        const text = await err.response?.data?.text?.();
+        if (text) message = JSON.parse(text)?.error?.message || message;
+      } catch {}
+      toast.error(message);
     },
   });
 }

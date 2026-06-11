@@ -55,6 +55,11 @@ router.post('/:id/generate-pdf', (req: any, res) => {
   invoiceController.generatePdf(req, res);
 });
 
+// GET /api/invoices/:id/download-pdf — generate and stream PDF bytes
+router.get('/:id/download-pdf', (req: any, res) => {
+  invoiceController.downloadPdf(req, res);
+});
+
 // PATCH /api/invoices/:id/status — update status
 router.patch('/:id/status', requirePermission('invoices', 'update') as any, validate(updateStatusSchema) as any, (req: any, res) => {
   invoiceController.updateStatus(req, res);

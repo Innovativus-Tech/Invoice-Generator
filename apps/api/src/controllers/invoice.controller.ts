@@ -155,6 +155,28 @@ export class InvoiceController {
     }
   }
 
+  async downloadPdf(req: AuthenticatedRequest<{ id: string }>, res: Response) {
+    try {
+      const invoice = await invoiceService.getInvoice(req.org.id, req.params.id as string);
+      const profile = await this.getOwnerProfile(req.org.id);
+
+      const pdfData = this.buildPdfData(invoice, profile);
+      const pdfBuffer = await pdfService.generatePdf(pdfData);
+
+      // Keep pdfUrl up to date, but storage issues must not block the download
+      try {
+        const pdfUrl = await storageService.uploadPdf(req.org.id, req.params.id as string, pdfBuffer);
+        await prisma.invoice.update({ where: { id: req.params.id as string }, data: { pdfUrl } });
+      } catch {}
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="Invoice-${invoice.invoice_number}.pdf"`);
+      res.send(pdfBuffer);
+    } catch (err: any) {
+      res.status(500).json({ data: null, error: { message: err.message, code: 'PDF_ERROR' }, meta: null });
+    }
+  }
+
   async send(req: AuthenticatedRequest<{ id: string }>, res: Response) {
     try {
       const invoice = await invoiceService.getInvoice(req.org.id, req.params.id as string);
