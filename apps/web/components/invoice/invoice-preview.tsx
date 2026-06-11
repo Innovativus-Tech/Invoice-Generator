@@ -168,10 +168,15 @@ export function InvoicePreview({ formData, profile, client, loading }: InvoicePr
                 {items.map((item, idx) => {
                   const disc = item.discount_percent ?? 0;
                   const amount = (item.quantity || 0) * (item.unit_price || 0) * (1 - disc / 100);
+                  const showBook = profile?.show_book_metadata ?? false;
                   return (
                     <tr key={idx} style={{ borderBottom: `0.5px solid ${BORDER}`, borderLeft: `0.5px solid ${BORDER}`, borderRight: `0.5px solid ${BORDER}` }}>
-                      <td style={{ padding: '4px', textAlign: 'center', color: '#111827' }}>{idx + 1}</td>
-                      <td style={{ padding: '4px', color: '#111827' }}>{item.description || '—'}</td>
+                      <td style={{ padding: '4px', textAlign: 'center', color: '#111827' }}>{idx}</td>
+                      <td style={{ padding: '4px', color: '#111827' }}>
+                        <div>{item.description || '—'}</div>
+                        {showBook && item.isbn && <div style={{ fontSize: '7px', color: GRAY, marginTop: '1px' }}>ISBN: {item.isbn}</div>}
+                        {showBook && item.author && <div style={{ fontSize: '7px', color: GRAY, marginTop: '1px' }}>Author: {item.author}</div>}
+                      </td>
                       <td style={{ padding: '4px', textAlign: 'center', color: '#111827' }}>{item.hsn_sac || ''}</td>
                       <td style={{ padding: '4px', textAlign: 'center', color: '#111827' }}>{item.gst_rate ? `${item.gst_rate}%` : ''}</td>
                       <td style={{ padding: '4px', textAlign: 'center', color: '#111827' }}>{item.quantity} Pcs</td>

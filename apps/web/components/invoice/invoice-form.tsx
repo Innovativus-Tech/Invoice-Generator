@@ -99,6 +99,8 @@ const invoiceFormSchema = z.object({
     hsn_sac: z.string().default(''),
     gst_rate: z.number().min(0).max(100).default(18),
     discount_percent: z.number().min(0).max(100).default(0),
+    isbn: z.string().optional().nullable(),
+    author: z.string().optional().nullable(),
   })).min(1, 'At least one item required'),
 });
 

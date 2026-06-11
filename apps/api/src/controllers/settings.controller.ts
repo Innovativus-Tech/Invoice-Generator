@@ -38,6 +38,7 @@ function serializeProfile(p: any) {
     bank_account_number: p.bankAccountNumber,
     bank_ifsc: p.bankIfsc,
     bank_branch: p.bankBranch,
+    show_book_metadata: p.showBookMetadata ?? false,
   };
 }
 
@@ -58,6 +59,7 @@ const ALLOWED_FIELDS: Record<string, string> = {
   bank_account_number: 'bankAccountNumber',
   bank_ifsc: 'bankIfsc',
   bank_branch: 'bankBranch',
+  show_book_metadata: 'showBookMetadata',
 };
 
 export class SettingsController {

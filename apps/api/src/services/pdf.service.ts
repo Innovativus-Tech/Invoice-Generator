@@ -118,6 +118,8 @@ interface InvoiceItem {
   hsn_sac: string;
   gst_rate: number;
   discount_percent: number;
+  isbn?: string | null;
+  author?: string | null;
 }
 
 interface SerializedItem extends InvoiceItem {
@@ -163,6 +165,7 @@ interface InvoiceData {
   logo_url?: string;
   signature_url?: string;
   signatory_name?: string;
+  show_book_metadata?: boolean;
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
@@ -474,11 +477,25 @@ function BFRow({ amount }: { amount: number }) {
   );
 }
 
-function ItemRow({ item }: { item: any }) {
+function ItemRow({ item, showBookMetadata }: { item: any; showBookMetadata?: boolean }) {
   const disc = item.discount_percent ?? 0;
+  const meta: string[] = [];
+  if (showBookMetadata) {
+    if (item.isbn) meta.push(`ISBN: ${item.isbn}`);
+    if (item.author) meta.push(`Author: ${item.author}`);
+  }
+  const descNode = meta.length > 0
+    ? React.createElement(View, { style: styles.colDesc },
+        React.createElement(Text, { style: styles.td }, item.description),
+        ...meta.map((line, i) =>
+          React.createElement(Text, { key: i, style: { fontSize: 7, color: GRAY, marginTop: 1 } }, line)
+        )
+      )
+    : React.createElement(Text, { style: [styles.td, styles.colDesc] }, item.description);
+
   return React.createElement(View, { style: styles.dataRow, wrap: false },
     React.createElement(Text, { style: [styles.td, styles.colSI] }, String(item.serial)),
-    React.createElement(Text, { style: [styles.td, styles.colDesc] }, item.description),
+    descNode,
     React.createElement(Text, { style: [styles.td, styles.colHSN] }, item.hsn_sac || ''),
     React.createElement(Text, { style: [styles.td, styles.colGST] }, item.gst_rate ? `${item.gst_rate}%` : ''),
     React.createElement(Text, { style: [styles.td, styles.colQty] }, `${item.quantity}`),
@@ -608,15 +625,34 @@ function SubtotalRow({ amount }: { amount: number }) {
   );
 }
 
-function IGSTRow({ data, subtotal }: { data: InvoiceData; subtotal: number }) {
+// Per-item GST sum — mirrors apps/web/lib/utils.ts:calculateGstTotals
+// so the downloaded PDF matches the live preview. Uses `?? 18` (not
+// `|| 18`) so a real 0% rate stays 0% instead of falling back to 18%.
+function computeGstAmount(items: InvoiceItem[]): number {
+  return items.reduce((sum, item) => {
+    const qty = Number(item.quantity) || 0;
+    const price = Number(item.unit_price) || 0;
+    const disc = Number(item.discount_percent) || 0;
+    const rate = item.gst_rate == null ? 18 : Number(item.gst_rate);
+    const lineAmt = qty * price * (1 - disc / 100);
+    return sum + lineAmt * (rate / 100);
+  }, 0);
+}
+
+function displayGstRate(items: InvoiceItem[]): number {
+  if (items.length === 0) return 0;
+  return items[0].gst_rate == null ? 18 : Number(items[0].gst_rate);
+}
+
+function IGSTRow({ data }: { data: InvoiceData; subtotal: number }) {
   const supplyType = data.supply_type || 'IGST';
-  const commonRate = data.items[0]?.gst_rate || 18;
-  const totalGstAmount = subtotal * (commonRate / 100);
-  const halfRate = commonRate / 2;
+  const rate = displayGstRate(data.items);
+  const totalGstAmount = computeGstAmount(data.items);
+  const halfRate = rate / 2;
 
   if (supplyType === 'IGST') {
     return React.createElement(View, { style: styles.totalRow },
-      React.createElement(Text, { style: styles.totalLabel }, `IGST (${commonRate}%):`),
+      React.createElement(Text, { style: styles.totalLabel }, `IGST (${rate}%):`),
       React.createElement(Text, { style: styles.totalValue }, formatIndianCurrency(totalGstAmount))
     );
   }
@@ -633,9 +669,7 @@ function IGSTRow({ data, subtotal }: { data: InvoiceData; subtotal: number }) {
 }
 
 function TotalWithTaxRow({ subtotal, data }: { subtotal: number; data: InvoiceData }) {
-  const commonRate = data.items[0]?.gst_rate || 18;
-  const totalGstAmount = subtotal * (commonRate / 100);
-  const total = subtotal + totalGstAmount;
+  const total = subtotal + computeGstAmount(data.items);
   return React.createElement(View, { style: styles.totalRow },
     React.createElement(Text, { style: styles.totalLabelBold }, 'Total Amount (with Tax):'),
     React.createElement(Text, { style: styles.totalValueBold }, formatIndianCurrency(total))
@@ -649,9 +683,7 @@ function IGSTOutputRow() {
 }
 
 function AmountInWordsRow({ subtotal, data }: { subtotal: number; data: InvoiceData }) {
-  const commonRate = data.items[0]?.gst_rate || 18;
-  const totalGstAmount = subtotal * (commonRate / 100);
-  const total = subtotal + totalGstAmount;
+  const total = subtotal + computeGstAmount(data.items);
   return React.createElement(View, { style: styles.wordsRow },
     React.createElement(Text, { style: styles.wordsText },
       React.createElement(Text, { style: { fontFamily: 'Helvetica-Bold' } }, 'Total Amount in Words: '),
@@ -733,7 +765,7 @@ function PageFooter({ current, total, biz }: { current: number; total: number; b
 function createGstInvoiceDocument(data: InvoiceData) {
   const itemsWithSerial: SerializedItem[] = (data.items || []).map((item, index) => ({
     ...item,
-    serial: index + 1,
+    serial: index,
     quantity: Number(item.quantity) || 0,
     unit_price: Number(item.unit_price) || 0,
     amount: Number(item.amount) || 0,
@@ -777,7 +809,7 @@ function createGstInvoiceDocument(data: InvoiceData) {
         // ── ITEMS SECTION — fills space between header and footer ──
         React.createElement(View, { style: styles.itemsSection },
           ...pageItems.map((item) =>
-            React.createElement(ItemRow, { key: item.serial, item })
+            React.createElement(ItemRow, { key: item.serial, item, showBookMetadata: data.show_book_metadata })
           )
         ),
 

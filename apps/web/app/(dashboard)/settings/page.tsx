@@ -53,6 +53,7 @@ export default function SettingsPage() {
     bank_account_number: '',
     bank_ifsc: '',
     bank_branch: '',
+    show_book_metadata: false,
   });
 
   const sigCanvasRef = React.useRef<SignatureCanvas>(null);
@@ -77,6 +78,7 @@ export default function SettingsPage() {
         bank_account_number: settings.bank_account_number || '',
         bank_ifsc: settings.bank_ifsc || '',
         bank_branch: settings.bank_branch || '',
+        show_book_metadata: settings.show_book_metadata ?? false,
       });
     }
   }, [settings]);
@@ -507,6 +509,23 @@ export default function SettingsPage() {
                 onChange={(e) => setForm({ ...form, next_invoice_number: parseInt(e.target.value) || 1001 })}
                 className="font-mono"
               />
+            </div>
+
+            <div className="mt-6 pt-6 border-t border-border">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.show_book_metadata ?? false}
+                  onChange={(e) => setForm({ ...form, show_book_metadata: e.target.checked })}
+                  className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-text-1">Show Book Name / ISBN / Author on invoices</span>
+                  <span className="block text-xs text-text-2 mt-1">
+                    Adds ISBN and Author inputs to every line item and prints them as small lines under the item Description in the invoice and PDF.
+                  </span>
+                </span>
+              </label>
             </div>
           </Card>
         )}

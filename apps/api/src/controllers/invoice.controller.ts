@@ -87,6 +87,7 @@ export class InvoiceController {
       bank_ifsc: p.bankIfsc,
       bank_branch: p.bankBranch,
       currency: p.currency,
+      show_book_metadata: (p as any).showBookMetadata ?? false,
     };
   }
 
@@ -118,6 +119,8 @@ export class InvoiceController {
         hsn_sac: item.hsn_sac || '',
         gst_rate: Number(item.gst_rate ?? 18),
         discount_percent: Number(item.discount_percent ?? 0),
+        isbn: item.isbn ?? null,
+        author: item.author ?? null,
       })),
       business_name: profile?.business_name,
       business_email: profile?.business_email,
@@ -139,6 +142,7 @@ export class InvoiceController {
       logo_url: profile?.logo_url,
       signature_url: profile?.signature_url,
       signatory_name: profile?.signatory_name,
+      show_book_metadata: Boolean(profile?.show_book_metadata),
     };
   }
 

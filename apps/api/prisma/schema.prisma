@@ -92,6 +92,7 @@ model Profile {
   bankIfsc          String?  @map("bank_ifsc") @db.Text
   bankBranch        String?  @map("bank_branch") @db.Text
   orgId             String?  @map("org_id") @db.Uuid
+  showBookMetadata  Boolean  @default(false) @map("show_book_metadata")
 
   organization Organization? @relation(fields: [orgId], references: [id])
 
@@ -203,6 +204,8 @@ model InvoiceItem {
   hsnSac          String?  @default("") @map("hsn_sac") @db.Text
   gstRate         Decimal? @default(18) @map("gst_rate") @db.Decimal(5, 2)
   discountPercent Decimal? @default(0) @map("discount_percent") @db.Decimal(5, 2)
+  isbn            String?  @db.Text
+  author          String?  @db.Text
   orgId           String?  @map("org_id") @db.Uuid
 
   invoice      Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)

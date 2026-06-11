@@ -28,6 +28,7 @@ export interface Profile {
   bank_account_number: string | null;
   bank_ifsc: string | null;
   bank_branch: string | null;
+  show_book_metadata?: boolean;
 }
 
 export interface Client {
@@ -69,6 +70,8 @@ export interface InvoiceItem {
   hsn_sac: string;
   gst_rate: number;
   discount_percent: number;
+  isbn?: string | null;
+  author?: string | null;
 }
 
 export interface Invoice {
@@ -168,6 +171,7 @@ export interface SettingsFormValues {
   bank_account_number: string;
   bank_ifsc: string;
   bank_branch: string;
+  show_book_metadata?: boolean;
 }
 
 // API response types

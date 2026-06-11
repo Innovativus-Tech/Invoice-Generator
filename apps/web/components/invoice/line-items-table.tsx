@@ -25,6 +25,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { Button } from '@/components/ui/button';
 import { formatIndianCurrency } from '@/lib/utils';
+import { useSettings } from '@/hooks/use-settings';
 import type { InvoiceFormValues, InventoryItem } from '@/types';
 
 function InventorySearchInput({
@@ -214,10 +215,12 @@ function SortableRow({
   id,
   index,
   onRemove,
+  showBookMetadata,
 }: {
   id: string;
   index: number;
   onRemove: () => void;
+  showBookMetadata: boolean;
 }) {
   const { register, watch, setValue, trigger } = useFormContext<InvoiceFormValues>();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -283,13 +286,29 @@ function SortableRow({
         {index + 1}
       </td>
 
-      {/* Description */}
+      {/* Description (+ optional ISBN / Author) */}
       <td className="px-1 py-1" style={{ verticalAlign: 'top' }}>
         <InventorySearchInput
           value={description}
           onChange={(val) => setValue(`items.${index}.description`, val)}
           onSelect={(item) => handleInventorySelect(index, item)}
         />
+        {showBookMetadata && (
+          <div className="mt-1 flex gap-1">
+            <input
+              {...register(`items.${index}.isbn`)}
+              placeholder="ISBN"
+              className={`${inputCls} text-xs`}
+              style={{ flex: 1 }}
+            />
+            <input
+              {...register(`items.${index}.author`)}
+              placeholder="Author"
+              className={`${inputCls} text-xs`}
+              style={{ flex: 1 }}
+            />
+          </div>
+        )}
       </td>
 
       {/* HSN/SAC */}
@@ -377,6 +396,8 @@ interface LineItemsTableProps {
 
 export function LineItemsTable({}: LineItemsTableProps) {
   const [inventoryModalOpen, setInventoryModalOpen] = useState(false);
+  const { data: settings } = useSettings();
+  const showBookMetadata = settings?.show_book_metadata ?? false;
   const { control } = useFormContext<InvoiceFormValues>();
   const { fields, append, remove, move } = useFieldArray({
     control,
@@ -439,6 +460,7 @@ export function LineItemsTable({}: LineItemsTableProps) {
                     id={field.id}
                     index={index}
                     onRemove={() => remove(index)}
+                    showBookMetadata={showBookMetadata}
                   />
                 ))}
               </tbody>
