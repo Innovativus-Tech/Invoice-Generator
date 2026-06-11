@@ -171,7 +171,7 @@ export function InvoicePreview({ formData, profile, client, loading }: InvoicePr
                   const showBook = profile?.show_book_metadata ?? false;
                   return (
                     <tr key={idx} style={{ borderBottom: `0.5px solid ${BORDER}`, borderLeft: `0.5px solid ${BORDER}`, borderRight: `0.5px solid ${BORDER}` }}>
-                      <td style={{ padding: '4px', textAlign: 'center', color: '#111827' }}>{idx}</td>
+                      <td style={{ padding: '4px', textAlign: 'center', color: '#111827' }}>{idx + 1}</td>
                       <td style={{ padding: '4px', color: '#111827' }}>
                         <div>{item.description || '—'}</div>
                         {showBook && item.isbn && <div style={{ fontSize: '7px', color: GRAY, marginTop: '1px' }}>ISBN: {item.isbn}</div>}

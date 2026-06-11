@@ -765,7 +765,7 @@ function PageFooter({ current, total, biz }: { current: number; total: number; b
 function createGstInvoiceDocument(data: InvoiceData) {
   const itemsWithSerial: SerializedItem[] = (data.items || []).map((item, index) => ({
     ...item,
-    serial: index,
+    serial: index + 1,
     quantity: Number(item.quantity) || 0,
     unit_price: Number(item.unit_price) || 0,
     amount: Number(item.amount) || 0,
