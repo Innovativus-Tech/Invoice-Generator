@@ -11,7 +11,7 @@ import type {
   PaginatedResponse,
   ApiResponse,
 } from '@/types';
-import { calculateInvoiceTotals } from '@/lib/utils';
+import { calculateGstTotals } from '@/lib/utils';
 
 // Query keys
 export const invoiceKeys = {
@@ -67,19 +67,15 @@ export function useCreateInvoice() {
 
   return useMutation({
     mutationFn: async (values: InvoiceFormValues) => {
-      const { subtotal, taxAmount, total } = calculateInvoiceTotals(
-        values.items,
-        values.tax_rate,
-        values.discount_amount
-      );
+      const { subtotal, totalGst, total } = calculateGstTotals(values.items);
       const body = {
         ...values,
         subtotal,
-        tax_amount: taxAmount,
+        tax_amount: totalGst,
         total,
         items: values.items.map((item, i) => ({
           ...item,
-          amount: item.quantity * item.unit_price,
+          amount: (item.quantity || 0) * (item.unit_price || 0) * (1 - (item.discount_percent ?? 0) / 100),
           sort_order: i,
         })),
       };
@@ -103,19 +99,15 @@ export function useUpdateInvoice() {
 
   return useMutation({
     mutationFn: async ({ id, values }: { id: string; values: InvoiceFormValues }) => {
-      const { subtotal, taxAmount, total } = calculateInvoiceTotals(
-        values.items,
-        values.tax_rate,
-        values.discount_amount
-      );
+      const { subtotal, totalGst, total } = calculateGstTotals(values.items);
       const body = {
         ...values,
         subtotal,
-        tax_amount: taxAmount,
+        tax_amount: totalGst,
         total,
         items: values.items.map((item, i) => ({
           ...item,
-          amount: item.quantity * item.unit_price,
+          amount: (item.quantity || 0) * (item.unit_price || 0) * (1 - (item.discount_percent ?? 0) / 100),
           sort_order: i,
         })),
       };

@@ -178,7 +178,7 @@ export function InvoicePreview({ formData, profile, client, loading }: InvoicePr
                         {showBook && item.author && <div style={{ fontSize: '7px', color: GRAY, marginTop: '1px' }}>Author: {item.author}</div>}
                       </td>
                       <td style={{ padding: '4px', textAlign: 'center', color: '#111827' }}>{item.hsn_sac || ''}</td>
-                      <td style={{ padding: '4px', textAlign: 'center', color: '#111827' }}>{item.gst_rate ? `${item.gst_rate}%` : ''}</td>
+                      <td style={{ padding: '4px', textAlign: 'center', color: '#111827' }}>{item.gst_rate == null ? '' : `${item.gst_rate}%`}</td>
                       <td style={{ padding: '4px', textAlign: 'center', color: '#111827' }}>{item.quantity} Pcs</td>
                       <td style={{ padding: '4px', textAlign: 'right', color: '#111827' }}>{fmt(item.unit_price || 0)}</td>
                       <td style={{ padding: '4px', textAlign: 'center', color: '#111827' }}>{disc > 0 ? `${disc}%` : '–'}</td>

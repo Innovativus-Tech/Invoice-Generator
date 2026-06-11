@@ -497,7 +497,7 @@ function ItemRow({ item, showBookMetadata }: { item: any; showBookMetadata?: boo
     React.createElement(Text, { style: [styles.td, styles.colSI] }, String(item.serial)),
     descNode,
     React.createElement(Text, { style: [styles.td, styles.colHSN] }, item.hsn_sac || ''),
-    React.createElement(Text, { style: [styles.td, styles.colGST] }, item.gst_rate ? `${item.gst_rate}%` : ''),
+    React.createElement(Text, { style: [styles.td, styles.colGST] }, item.gst_rate == null ? '' : `${item.gst_rate}%`),
     React.createElement(Text, { style: [styles.td, styles.colQty] }, `${item.quantity}`),
     React.createElement(Text, { style: [styles.td, styles.colRate] }, formatIndianCurrency(item.unit_price)),
     React.createElement(Text, { style: [styles.td, styles.colDisc] }, disc > 0 ? `${disc}%` : '\u2013'),

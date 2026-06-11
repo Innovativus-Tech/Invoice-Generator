@@ -228,12 +228,13 @@ function SortableRow({
   const description = watch(`items.${index}.description`) || '';
 
   function handleInventorySelect(rowIndex: number, item: InventoryItem) {
-    const label = item.isbn
-      ? `${item.book_title} (ISBN: ${item.isbn})`
-      : item.book_title;
-
-    setValue(`items.${rowIndex}.description` as Path<InvoiceFormValues>, label);
+    setValue(`items.${rowIndex}.description` as Path<InvoiceFormValues>, item.book_title);
     setValue(`items.${rowIndex}.gst_rate` as Path<InvoiceFormValues>, item.gst_rate);
+    // Always copy ISBN + Author into the structured fields — the printed
+    // invoice only renders them if the org has the toggle enabled, so this
+    // is safe either way and saves the user from typing them manually.
+    setValue(`items.${rowIndex}.isbn` as Path<InvoiceFormValues>, item.isbn ?? '');
+    setValue(`items.${rowIndex}.author` as Path<InvoiceFormValues>, item.author ?? '');
     if (item.price > 0) {
       setValue(`items.${rowIndex}.unit_price` as Path<InvoiceFormValues>, item.price);
     }
@@ -496,9 +497,7 @@ export function LineItemsTable({}: LineItemsTableProps) {
         onClose={() => setInventoryModalOpen(false)}
         onAddItem={(item) => {
           append({
-            description: item.isbn
-              ? `${item.book_title} (ISBN: ${item.isbn})`
-              : item.book_title,
+            description: item.book_title,
             quantity: 1,
             unit_price: item.price > 0 ? item.price : 0,
             amount: item.price > 0 ? item.price : 0,
@@ -506,6 +505,8 @@ export function LineItemsTable({}: LineItemsTableProps) {
             hsn_sac: '',
             gst_rate: item.gst_rate || 0,
             discount_percent: 0,
+            isbn: item.isbn ?? '',
+            author: item.author ?? '',
           });
         }}
       />
