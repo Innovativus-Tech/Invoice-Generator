@@ -4,12 +4,13 @@
 -- Run this entire script in Supabase SQL Editor on a brand-new
 -- project to create the complete database schema from scratch.
 --
+-- Covers all migrations: 001 → 019
+--
 -- Usage:
 --   1. Create a new Supabase project.
 --   2. Open the SQL Editor.
 --   3. Paste and run this entire file.
---   4. Go to Storage → create a bucket named "invoices" (public).
---      (The INSERT below handles it, but the UI also works.)
+--   4. Storage bucket "invoices" is created automatically below.
 --   5. Update your .env files with the new project's credentials.
 -- ============================================================
 
@@ -121,7 +122,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   bank_account_number  TEXT,
   bank_ifsc            TEXT,
   bank_branch          TEXT,
-  org_id               UUID    REFERENCES public.organizations(id) ON DELETE SET NULL
+  org_id               UUID    REFERENCES public.organizations(id) ON DELETE SET NULL,
+  show_book_metadata   BOOLEAN NOT NULL DEFAULT FALSE  -- migration 019
 );
 
 CREATE INDEX IF NOT EXISTS idx_profiles_org_id ON public.profiles(org_id);
@@ -278,7 +280,9 @@ CREATE TABLE IF NOT EXISTS public.invoice_items (
   sort_order       INTEGER       DEFAULT 0,
   hsn_sac          TEXT,
   gst_rate         NUMERIC(5,2)  DEFAULT 0,
-  discount_percent NUMERIC(5,2)  DEFAULT 0
+  discount_percent NUMERIC(5,2)  DEFAULT 0,
+  isbn             TEXT,         -- migration 019: book metadata
+  author           TEXT          -- migration 019: book metadata
 );
 
 CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice_id ON public.invoice_items(invoice_id);
@@ -605,25 +609,50 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('invoices', 'invoices', true)
 ON CONFLICT (id) DO UPDATE SET public = true;
 
--- Authenticated users can upload/manage files inside their own folder
+-- service_role: full access (used by the API server for PDF/logo uploads)
 DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_policies
     WHERE schemaname = 'storage' AND tablename = 'objects'
-      AND policyname = 'Authenticated users manage own invoice files'
+      AND policyname = 'service_role_all_invoices'
   ) THEN
-    CREATE POLICY "Authenticated users manage own invoice files"
+    CREATE POLICY "service_role_all_invoices"
       ON storage.objects FOR ALL
+      TO service_role
+      USING (bucket_id = 'invoices')
+      WITH CHECK (bucket_id = 'invoices');
+  END IF;
+END $$;
+
+-- Authenticated users: INSERT into the invoices bucket
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'storage' AND tablename = 'objects'
+      AND policyname = 'authenticated_write_invoices'
+  ) THEN
+    CREATE POLICY "authenticated_write_invoices"
+      ON storage.objects FOR INSERT
       TO authenticated
-      USING (
-        bucket_id = 'invoices'
-        AND (storage.foldername(name))[1] = auth.uid()::text
-      )
-      WITH CHECK (
-        bucket_id = 'invoices'
-        AND (storage.foldername(name))[1] = auth.uid()::text
-      );
+      WITH CHECK (bucket_id = 'invoices');
+  END IF;
+END $$;
+
+-- Authenticated users: UPDATE objects in the invoices bucket
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'storage' AND tablename = 'objects'
+      AND policyname = 'authenticated_update_invoices'
+  ) THEN
+    CREATE POLICY "authenticated_update_invoices"
+      ON storage.objects FOR UPDATE
+      TO authenticated
+      USING (bucket_id = 'invoices')
+      WITH CHECK (bucket_id = 'invoices');
   END IF;
 END $$;
 
