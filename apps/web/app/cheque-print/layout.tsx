@@ -3,7 +3,7 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { Instrument_Serif, Sora } from 'next/font/google';
-import './cheque-print.css';
+import '@/styles/cheque-print.css';
 
 const display = Instrument_Serif({
   weight: '400',
@@ -16,7 +16,7 @@ const body = Sora({
   variable: '--font-body',
 });
 
-export default function ChequePrintLayout({ children }: { children: React.ReactNode }) {
+export default function ChequePrintOutputLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   React.useEffect(() => {
@@ -28,7 +28,7 @@ export default function ChequePrintLayout({ children }: { children: React.ReactN
 
   return (
     <div
-      className={`${display.variable} ${body.variable} cheque-print-scope app-atmosphere flex min-h-screen flex-col antialiased`}
+      className={`${display.variable} ${body.variable} cheque-print-scope cheque-print-standalone app-atmosphere flex min-h-screen flex-col antialiased`}
     >
       {children}
     </div>

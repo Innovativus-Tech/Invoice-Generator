@@ -48,7 +48,6 @@ export default function AppHeader({ compact = false }: AppHeaderProps) {
           >
             Calibrate
           </Link>
-          <Link href="/dashboard">Dashboard</Link>
         </nav>
       </div>
     </header>
