@@ -1,0 +1,632 @@
+/*
+ * Scoped styles for the Cheque Print section.
+ * Ported from the standalone cheque-print app (Tailwind v4) to this app's
+ * Tailwind v3 setup. All custom properties and non-utility rules are scoped
+ * under .cheque-print-scope so they never leak into the rest of the dashboard.
+ * Matching color/font tokens are registered in tailwind.config.ts.
+ */
+
+.cheque-print-scope {
+  --ink: #071a14;
+  --ink-soft: #2a463c;
+  --paper: #e7ece7;
+  --paper-bright: #fbfcfb;
+  --leaf: #0e6b4c;
+  --leaf-deep: #0a4d37;
+  --brass: #a88955;
+  --brass-soft: #d4c3a1;
+  --mist: #cfdad3;
+  --line: #c2cfc6;
+  --danger: #8f1d1d;
+  --warn: #7a4e0e;
+  --page-top: 0mm;
+  --page-left: 60mm;
+  --radius: 18px;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-soft: cubic-bezier(0.33, 1, 0.68, 1);
+
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body), system-ui, sans-serif;
+  min-height: 100vh;
+  letter-spacing: -0.01em;
+}
+
+.app-shell {
+  width: 100%;
+  position: relative;
+}
+
+.app-atmosphere {
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse 90% 55% at 8% -5%, rgb(14 107 76 / 0.16), transparent 52%),
+    radial-gradient(ellipse 70% 45% at 98% 8%, rgb(168 137 85 / 0.14), transparent 48%),
+    radial-gradient(ellipse 50% 40% at 50% 100%, rgb(7 26 20 / 0.05), transparent 60%),
+    linear-gradient(165deg, #f3f6f2 0%, var(--paper) 42%, #dfe7e1 100%);
+}
+
+.app-atmosphere::before {
+  content: "";
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  opacity: 0.4;
+  background-image:
+    radial-gradient(circle at 20% 20%, rgb(255 255 255 / 0.35) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 80% 40%, rgb(7 26 20 / 0.05) 0 1px, transparent 1.5px);
+  background-size: 6px 6px, 9px 9px;
+  mask-image: radial-gradient(ellipse at center, black 20%, transparent 75%);
+}
+
+.app-atmosphere::after {
+  content: "";
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgb(7 26 20 / 0.035), transparent 12%, transparent 88%, rgb(7 26 20 / 0.035));
+}
+
+.font-display {
+  font-family: var(--font-display), Georgia, "Times New Roman", serif;
+  font-feature-settings: "ss01" on, "kern" on;
+}
+
+.ui-panel {
+  position: relative;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.92), rgb(251 252 251 / 0.96));
+  border: 1px solid color-mix(in srgb, var(--line) 80%, white);
+  border-radius: var(--radius);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.9) inset,
+    0 18px 40px -28px rgb(7 26 20 / 0.35);
+}
+
+.ui-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.35);
+}
+
+.ui-label {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--brass);
+}
+
+.ui-field {
+  position: relative;
+  padding-top: 0.15rem;
+}
+
+.ui-input {
+  width: 100%;
+  margin-top: 0.55rem;
+  border: 0;
+  border-bottom: 1.5px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  padding: 0.55rem 0.1rem 0.7rem;
+  color: var(--ink);
+  outline: none;
+  font-size: 1.05rem;
+  transition:
+    border-color 220ms var(--ease-out),
+    background 220ms var(--ease-out),
+    padding-left 220ms var(--ease-out);
+}
+
+.ui-input:hover {
+  border-bottom-color: color-mix(in srgb, var(--brass) 45%, var(--line));
+}
+
+.ui-input:focus {
+  border-bottom-color: var(--leaf);
+  background: linear-gradient(180deg, transparent, rgb(14 107 76 / 0.04));
+  padding-left: 0.35rem;
+}
+
+.ui-input::placeholder {
+  color: rgb(42 70 60 / 0.35);
+}
+
+.ui-input-mono {
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  letter-spacing: 0.08em;
+}
+
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border-radius: 12px;
+  padding: 0.78rem 1.35rem;
+  font-size: 0.84rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition:
+    background 200ms var(--ease-out),
+    color 200ms var(--ease-out),
+    border-color 200ms var(--ease-out),
+    transform 200ms var(--ease-out),
+    box-shadow 200ms var(--ease-out),
+    opacity 200ms var(--ease-out);
+}
+
+.ui-btn:active:not(:disabled) {
+  transform: translateY(1px) scale(0.99);
+}
+
+.ui-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+
+.ui-btn-primary {
+  background: linear-gradient(180deg, #13825c, var(--leaf-deep));
+  color: #f7fbf8;
+  border: 1px solid var(--leaf-deep);
+  box-shadow: 0 10px 24px -14px rgb(14 107 76 / 0.9);
+}
+
+.ui-btn-primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #159468, #0c5940);
+  box-shadow: 0 14px 28px -12px rgb(14 107 76 / 0.95);
+}
+
+.ui-btn-primary.is-ready {
+  animation: chequeReadyPulse 2.4s var(--ease-soft) infinite;
+}
+
+.ui-btn-ink {
+  background: var(--ink);
+  color: #eef5f0;
+  border: 1px solid var(--ink);
+}
+
+.ui-btn-ink:hover:not(:disabled) {
+  background: #123028;
+}
+
+.ui-btn-ghost {
+  background: rgb(255 255 255 / 0.35);
+  color: var(--ink-soft);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(8px);
+}
+
+.ui-btn-ghost:hover:not(:disabled) {
+  background: rgb(255 255 255 / 0.7);
+  border-color: color-mix(in srgb, var(--brass) 35%, var(--line));
+  color: var(--ink);
+}
+
+.fade-rise {
+  animation: chequeFadeRise 780ms var(--ease-out) both;
+}
+
+.fade-rise-delay-1 {
+  animation-delay: 70ms;
+}
+
+.fade-rise-delay-2 {
+  animation-delay: 140ms;
+}
+
+.fade-rise-delay-3 {
+  animation-delay: 210ms;
+}
+
+@keyframes chequeFadeRise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes chequeInkDraw {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes chequeReadyPulse {
+  0%,
+  100% {
+    box-shadow: 0 10px 24px -14px rgb(14 107 76 / 0.9);
+  }
+  50% {
+    box-shadow: 0 14px 34px -10px rgb(14 107 76 / 1);
+  }
+}
+
+@keyframes chequeInkIn {
+  from {
+    opacity: 0;
+    filter: blur(3px);
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+
+@keyframes chequeFloatLeaf {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-0.4deg);
+  }
+  50% {
+    transform: translateY(-6px) rotate(0.4deg);
+  }
+}
+
+.brand-rule {
+  height: 2px;
+  width: 5.5rem;
+  background: linear-gradient(90deg, var(--leaf), var(--brass), transparent);
+  transform-origin: left center;
+  animation: chequeInkDraw 900ms var(--ease-out) 180ms both;
+}
+
+.progress-rail {
+  height: 3px;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(7 26 20 / 0.08);
+}
+
+.progress-rail > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--leaf), var(--brass));
+  transition: width 420ms var(--ease-out);
+}
+
+.step-dot {
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  display: grid;
+  place-items: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+  background: rgb(255 255 255 / 0.55);
+  transition:
+    background 220ms var(--ease-out),
+    border-color 220ms var(--ease-out),
+    color 220ms var(--ease-out),
+    transform 220ms var(--ease-out);
+}
+
+.step-dot.is-done {
+  background: var(--leaf);
+  border-color: var(--leaf-deep);
+  color: #fff;
+  transform: scale(1.05);
+}
+
+.live-cheque {
+  position: relative;
+  aspect-ratio: 200 / 90;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 16px;
+  background:
+    linear-gradient(145deg, #ffffff 0%, #f4f7f4 48%, #eef3ef 100%);
+  border: 1px solid color-mix(in srgb, var(--brass-soft) 55%, var(--line));
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.95) inset,
+    0 30px 60px -36px rgb(7 26 20 / 0.45);
+  animation: chequeFloatLeaf 7s var(--ease-soft) infinite;
+}
+
+.live-cheque::before {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  border: 1px solid rgb(168 137 85 / 0.28);
+  border-radius: 10px;
+  pointer-events: none;
+}
+
+.live-cheque::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 18%;
+  height: 1px;
+  background: repeating-linear-gradient(
+    90deg,
+    rgb(7 26 20 / 0.18) 0 8px,
+    transparent 8px 14px
+  );
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.live-cheque-grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.045;
+  background-image:
+    linear-gradient(rgb(7 26 20) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(7 26 20) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.live-ink {
+  animation: chequeInkIn 380ms var(--ease-out) both;
+}
+
+.words-field {
+  min-height: 3.6rem;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--leaf) 22%, var(--line));
+  background:
+    linear-gradient(180deg, rgb(14 107 76 / 0.05), rgb(14 107 76 / 0.02)),
+    #fff;
+  padding: 0.95rem 1.05rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink);
+  line-height: 1.4;
+}
+
+.history-row {
+  transition:
+    background 180ms var(--ease-out),
+    border-color 180ms var(--ease-out),
+    transform 180ms var(--ease-out);
+}
+
+.history-row:hover {
+  background: rgb(14 107 76 / 0.05);
+  border-color: color-mix(in srgb, var(--leaf) 30%, var(--line));
+  transform: translateX(2px);
+}
+
+.modal-backdrop {
+  animation: chequeFadeRise 240ms var(--ease-out) both;
+}
+
+.modal-panel {
+  animation: chequeFadeRise 360ms var(--ease-out) both;
+}
+
+.nav-pill {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.28rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgb(255 255 255 / 0.45);
+  backdrop-filter: blur(10px);
+}
+
+.nav-pill a {
+  border-radius: 9px;
+  padding: 0.45rem 0.95rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-decoration: none;
+  transition:
+    background 180ms var(--ease-out),
+    color 180ms var(--ease-out);
+}
+
+.nav-pill a:hover,
+.nav-pill a.is-active {
+  background: var(--ink);
+  color: #eef5f0;
+}
+
+/*
+ * Print block footprint after +90deg rotation: 90 mm wide x 200 mm tall.
+ * Positioned on A4 via --page-top / --page-left (whole-block calibration).
+ * Field mm gaps inside the cheque face are unchanged.
+ */
+.print-root {
+  display: none;
+  width: 90mm;
+  height: 200mm;
+  position: relative;
+  background: transparent;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.print-cheque-page,
+.cheque-print-surface {
+  width: 200mm !important;
+  height: 90mm !important;
+  max-width: 200mm !important;
+  max-height: 90mm !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  transform: translateX(90mm) rotate(90deg) !important;
+  transform-origin: top left !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+}
+
+.cheque-preview-bg {
+  object-fit: contain;
+  object-position: center center;
+}
+
+.print-preview-a4-scale {
+  width: 210mm;
+  margin: 0 auto;
+  transform-origin: top center;
+}
+
+.print-preview-a4 {
+  width: 210mm;
+  height: 297mm;
+  position: relative;
+  background: #fff;
+  border: 1px solid #94a3b8;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.08);
+  overflow: hidden;
+}
+
+.print-preview-a4-block {
+  position: absolute;
+  width: 90mm;
+  height: 200mm;
+  overflow: hidden;
+  background: transparent;
+}
+
+.print-preview-a4-block .cheque-print-surface,
+.print-preview-a4-block .print-cheque-page,
+.print-preview-a4-block .cheque-canvas {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 200mm !important;
+  height: 90mm !important;
+  transform: translateX(90mm) rotate(90deg) !important;
+  transform-origin: top left !important;
+}
+
+.print-preview-portrait {
+  width: 90mm;
+  height: 200mm;
+  position: relative;
+  margin: 0 auto;
+  background: #fff;
+  border: 1px dashed #94a3b8;
+  overflow: hidden;
+}
+
+.print-preview-portrait .cheque-print-surface,
+.print-preview-portrait .print-cheque-page,
+.print-preview-portrait .cheque-canvas {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 200mm !important;
+  height: 90mm !important;
+  transform: translateX(90mm) rotate(90deg) !important;
+  transform-origin: top left !important;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 210mm !important;
+    height: 297mm !important;
+    overflow: hidden !important;
+    display: block !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-route {
+    display: block !important;
+    width: 210mm !important;
+    height: 297mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    position: relative !important;
+    background: transparent !important;
+  }
+
+  .print-root {
+    display: block !important;
+    width: 90mm !important;
+    height: 200mm !important;
+    position: absolute !important;
+    top: var(--page-top, 0mm) !important;
+    left: var(--page-left, 60mm) !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background: transparent !important;
+  }
+
+  .print-cheque-page,
+  .cheque-canvas,
+  .cheque-print-surface {
+    display: block !important;
+    width: 200mm !important;
+    height: 90mm !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    transform: translateX(90mm) rotate(90deg) !important;
+    transform-origin: top left !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+    background: transparent !important;
+  }
+
+  .cheque-preview-bg,
+  img.cheque-preview-bg {
+    display: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-rise,
+  .fade-rise-delay-1,
+  .fade-rise-delay-2,
+  .fade-rise-delay-3,
+  .brand-rule,
+  .modal-backdrop,
+  .modal-panel,
+  .live-cheque,
+  .live-ink,
+  .ui-btn-primary.is-ready {
+    animation: none !important;
+  }
+}

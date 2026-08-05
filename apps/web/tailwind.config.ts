@@ -21,6 +21,17 @@ const config: Config = {
         warning: '#F59E0B',
         danger: '#EF4444',
         info: '#3B82F6',
+        // Cheque Print section tokens (scoped under .cheque-print-scope)
+        ink: 'var(--ink)',
+        'ink-soft': 'var(--ink-soft)',
+        paper: 'var(--paper)',
+        'paper-bright': 'var(--paper-bright)',
+        leaf: 'var(--leaf)',
+        'leaf-deep': 'var(--leaf-deep)',
+        brass: 'var(--brass)',
+        'brass-soft': 'var(--brass-soft)',
+        mist: 'var(--mist)',
+        line: 'var(--line)',
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],

@@ -16,6 +16,7 @@ import {
   Package,
   TrendingUp,
   ShoppingCart,
+  Printer,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
@@ -34,6 +35,7 @@ export function Sidebar() {
     { href: '/invoices', label: 'Invoices', icon: FileText },
     { href: '/clients', label: 'Clients', icon: Users },
     { href: '/inventory', label: 'Inventory', icon: Package },
+    { href: '/cheque-print', label: 'Cheque Print', icon: Printer },
     { href: '/settings', label: 'Settings', icon: Settings },
   ];
 
