@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { BINDING_OPTIONS } from '@/lib/doc-types';
 import type { InventoryItem, InventoryFormValues } from '@/types';
 
 interface InventoryFormProps {
@@ -27,7 +28,11 @@ const defaultForm: InventoryFormValues = {
   publication_date: '',
   price: 0,
   gst_rate: 0,
-  stock: 1,
+  stock: 0,
+  binding: '',
+  purchase_rate: 0,
+  min_stock: 0,
+  hsn_code: '',
 };
 
 export function InventoryForm({ open, onClose, item, onSave, loading }: InventoryFormProps) {
@@ -47,7 +52,11 @@ export function InventoryForm({ open, onClose, item, onSave, loading }: Inventor
         publication_date: item.publication_date || '',
         price: item.price || 0,
         gst_rate: item.gst_rate ?? 0,
-        stock: item.stock ?? 1,
+        stock: item.stock ?? 0,
+        binding: item.binding || '',
+        purchase_rate: item.purchase_rate ?? 0,
+        min_stock: item.min_stock ?? 0,
+        hsn_code: item.hsn_code || '',
       });
     } else {
       setForm(defaultForm);
@@ -123,34 +132,82 @@ export function InventoryForm({ open, onClose, item, onSave, loading }: Inventor
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Input
+                      label="Binding"
+                      list="inventory-binding-options"
+                      value={form.binding}
+                      onChange={(e) => setForm({ ...form, binding: e.target.value })}
+                      placeholder="Paperback, Hardbound…"
+                    />
+                    <datalist id="inventory-binding-options">
+                      {BINDING_OPTIONS.map((b) => <option key={b} value={b} />)}
+                    </datalist>
+                  </div>
                   <Input
-                    label="Price (₹)"
+                    label="HSN code"
+                    value={form.hsn_code}
+                    onChange={(e) => setForm({ ...form, hsn_code: e.target.value })}
+                    placeholder="4901"
+                    className="font-mono"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    label="Selling price / MRP (₹)"
                     type="number"
                     min="0"
                     step="0.01"
                     value={form.price || ''}
                     onChange={(e) => setForm({ ...form, price: parseFloat(e.target.value) || 0 })}
                   />
-                  <Input
-                    label="Stock"
-                    type="number"
-                    min="0"
-                    value={form.stock || ''}
-                    onChange={(e) => setForm({ ...form, stock: parseInt(e.target.value, 10) || 0 })}
-                  />
+                  <div>
+                    <Input
+                      label="Purchase rate (₹)"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={form.purchase_rate || ''}
+                      onChange={(e) => setForm({ ...form, purchase_rate: parseFloat(e.target.value) || 0 })}
+                    />
+                    <p className="mt-1 text-xs text-text-2">Rate from binder / supplier. Updated by each purchase bill.</p>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <Input
+                      label={item ? 'Stock' : 'Opening stock'}
+                      type="number"
+                      value={String(form.stock ?? 0)}
+                      onChange={(e) => setForm({ ...form, stock: parseInt(e.target.value, 10) || 0 })}
+                    />
+                  </div>
                   <Input
-                    label="GST Rate (%)"
+                    label="Reorder level"
+                    type="number"
+                    min="0"
+                    value={form.min_stock || ''}
+                    onChange={(e) => setForm({ ...form, min_stock: parseInt(e.target.value, 10) || 0 })}
+                    placeholder="0"
+                  />
+                  <Input
+                    label="GST rate (%)"
                     type="number"
                     min="0"
                     max="100"
                     step="0.5"
                     value={form.gst_rate || ''}
                     onChange={(e) => setForm({ ...form, gst_rate: parseFloat(e.target.value) || 0 })}
+                    placeholder="0"
                   />
                 </div>
+                <p className="text-xs text-text-2 -mt-2">
+                  {item
+                    ? 'Changing stock here is recorded as a stock adjustment. Sales, purchases and returns update it automatically.'
+                    : 'Reorder level: you are alerted on the dashboard when stock falls to this number.'}
+                </p>
 
                 <div className="flex gap-3 pt-4">
                   <Button variant="secondary" className="flex-1" onClick={onClose}>Cancel</Button>

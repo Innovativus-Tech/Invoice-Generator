@@ -36,8 +36,8 @@ export function InventoryTable({ items, onEdit, onDelete, currency = 'INR', curr
               <th className="px-6 py-4">ISBN</th>
               <th className="px-6 py-4">Author</th>
               <th className="px-6 py-4">Publisher</th>
-              <th className="px-6 py-4">Product Form</th>
-              <th className="px-6 py-4">Language</th>
+              <th className="px-6 py-4">Binding</th>
+              <th className="px-6 py-4 text-right">Purchase Rate</th>
               <th className="px-6 py-4 text-right">Price ({currency === 'INR' ? '₹' : currency})</th>
               <th className="px-6 py-4 text-center">GST %</th>
               <th className="px-6 py-4 text-center">Stock</th>
@@ -63,10 +63,10 @@ export function InventoryTable({ items, onEdit, onDelete, currency = 'INR', curr
                   {item.publisher || '-'}
                 </td>
                 <td className="px-6 py-4 text-text-2">
-                  {item.product_form || '-'}
+                  {item.binding || item.product_form || '-'}
                 </td>
-                <td className="px-6 py-4 text-text-2">
-                  {item.language || '-'}
+                <td className="px-6 py-4 text-right text-text-2">
+                  {item.purchase_rate ? formatCurrency(item.purchase_rate, currency) : '-'}
                 </td>
                 <td className="px-6 py-4 text-right font-medium text-text-1">
                   {formatCurrency(item.price, currency)}
@@ -74,8 +74,17 @@ export function InventoryTable({ items, onEdit, onDelete, currency = 'INR', curr
                 <td className="px-6 py-4 text-center text-text-2">
                   {item.gst_rate}%
                 </td>
-                <td className="px-6 py-4 text-center text-text-1">
-                  {item.stock}
+                <td className="px-6 py-4 text-center">
+                  <span className={
+                    item.stock <= 0 ? 'font-semibold text-red-600'
+                    : (item.min_stock ?? 0) > 0 && item.stock <= (item.min_stock ?? 0) ? 'font-semibold text-amber-600'
+                    : 'text-text-1'
+                  }>
+                    {item.stock}
+                  </span>
+                  {(item.damaged_stock ?? 0) > 0 && (
+                    <span className="block text-[10px] text-red-500" title="Damaged copies">+{item.damaged_stock} damaged</span>
+                  )}
                 </td>
                 {(canEdit || canDelete) && (
                   <td className="px-6 py-4 text-right">

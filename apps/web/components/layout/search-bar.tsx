@@ -7,12 +7,14 @@ import { useRouter } from 'next/navigation';
 import apiClient from '@/lib/api-client';
 import { formatCurrency, formatDate, getInitials } from '@/lib/utils';
 import { StatusBadge } from '@/components/invoice/status-badge';
-import type { InvoiceStatus } from '@/types';
+import { docPath, docUi } from '@/lib/doc-types';
+import type { DocType, InvoiceStatus } from '@/types';
 
 interface SearchInvoice {
   id: string;
   invoice_number: string;
   bill_number: string;
+  doc_type: DocType;
   client_name: string;
   total: number;
   status: InvoiceStatus;
@@ -108,7 +110,7 @@ export function SearchBar() {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => { if (debouncedQuery.length >= 2) setOpen(true); }}
-        placeholder="Search invoices, clients..."
+        placeholder="Search bills, parties, LR no…"
         className="h-9 w-64 rounded-lg border border-border bg-surface pl-9 pr-9 text-sm text-text-1 placeholder:text-text-2/50 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors dark:bg-card dark:border-border"
       />
       {isFetching && (
@@ -126,18 +128,18 @@ export function SearchBar() {
           {invoices.length > 0 && (
             <div>
               <div className="px-3 py-2 text-xs font-semibold text-gray-400 dark:text-text-2 uppercase tracking-wider">
-                Invoices
+                Documents
               </div>
               {invoices.map((inv) => (
                 <button
                   key={inv.id}
-                  onClick={() => navigateTo(`/invoices/${inv.id}`)}
+                  onClick={() => navigateTo(docPath(inv.doc_type ?? 'sales_invoice', inv.id))}
                   className="w-full px-3 py-2.5 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-border/30 cursor-pointer transition-colors text-left"
                 >
                   <div className="flex flex-col gap-0.5">
                     <span className="font-mono font-medium text-sm text-text-1">{inv.invoice_number}</span>
                     <span className="text-xs text-text-2">
-                      {inv.client_name} · {formatDate(inv.issue_date)}
+                      {docUi(inv.doc_type ?? 'sales_invoice').label} · {inv.client_name || '—'} · {formatDate(inv.issue_date)}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">

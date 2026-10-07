@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { useFormContext, useFieldArray, type Path } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/api-client';
-import { Trash2, GripVertical, Plus, Search } from 'lucide-react';
+import { Trash2, GripVertical, Plus, Search, Package, X } from 'lucide-react';
 import { InventorySearchModal } from './inventory-search-modal';
 import {
   DndContext,
@@ -26,7 +26,8 @@ import { CSS } from '@dnd-kit/utilities';
 import { Button } from '@/components/ui/button';
 import { formatIndianCurrency } from '@/lib/utils';
 import { useSettings } from '@/hooks/use-settings';
-import type { InvoiceFormValues, InventoryItem } from '@/types';
+import { BINDING_OPTIONS, docUi } from '@/lib/doc-types';
+import type { DocType, DocumentFormValues, DocumentItem, InventoryItem } from '@/types';
 
 function InventorySearchInput({
   value,
@@ -175,11 +176,12 @@ function InventorySearchInput({
           </div>
           <div style={{ fontSize: '11px', color: '#9B98AE', marginTop: '2px' }}>
             {[item.author, item.publisher].filter(Boolean).join(' · ')}
-            {item.product_form && (
-              <span style={{ marginLeft: '8px', color: '#CBD5E1' }}>
-                {item.product_form}
-              </span>
+            {item.binding && (
+              <span style={{ marginLeft: '8px', color: '#94A3B8' }}>{item.binding}</span>
             )}
+            <span style={{ marginLeft: '8px', color: item.stock > 0 ? '#16A34A' : '#DC2626' }}>
+              Stock: {item.stock}
+            </span>
           </div>
         </div>
       ))}
@@ -211,36 +213,49 @@ function InventorySearchInput({
   );
 }
 
+/** Line values to copy from an inventory item. Purchase documents default to the purchase rate. */
+export function lineFromInventory(item: InventoryItem, docType: DocType): Partial<DocumentItem> {
+  const usePurchase = docUi(docType).usesPurchaseRate;
+  const rate = usePurchase ? (item.purchase_rate || item.price) : item.price;
+  return {
+    item_id: item.id,
+    description: item.book_title,
+    gst_rate: item.gst_rate,
+    isbn: item.isbn ?? '',
+    author: item.author ?? '',
+    binding: item.binding ?? '',
+    hsn_sac: item.hsn_code ?? '',
+    ...(rate > 0 && { unit_price: rate }),
+  };
+}
+
 function SortableRow({
   id,
   index,
   onRemove,
   showBookMetadata,
+  docType,
 }: {
   id: string;
   index: number;
   onRemove: () => void;
   showBookMetadata: boolean;
+  docType: DocType;
 }) {
-  const { register, watch, setValue, trigger } = useFormContext<InvoiceFormValues>();
+  const { register, watch, setValue, trigger } = useFormContext<DocumentFormValues>();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
   const description = watch(`items.${index}.description`) || '';
 
   function handleInventorySelect(rowIndex: number, item: InventoryItem) {
-    setValue(`items.${rowIndex}.description` as Path<InvoiceFormValues>, item.book_title);
-    setValue(`items.${rowIndex}.gst_rate` as Path<InvoiceFormValues>, item.gst_rate);
-    // Always copy ISBN + Author into the structured fields — the printed
-    // invoice only renders them if the org has the toggle enabled, so this
-    // is safe either way and saves the user from typing them manually.
-    setValue(`items.${rowIndex}.isbn` as Path<InvoiceFormValues>, item.isbn ?? '');
-    setValue(`items.${rowIndex}.author` as Path<InvoiceFormValues>, item.author ?? '');
-    if (item.price > 0) {
-      setValue(`items.${rowIndex}.unit_price` as Path<InvoiceFormValues>, item.price);
+    // Linking the row to the inventory item is what makes this line move stock.
+    // ISBN/Author are always copied; they only print when the org enables them.
+    for (const [key, value] of Object.entries(lineFromInventory(item, docType))) {
+      setValue(`items.${rowIndex}.${key}` as Path<DocumentFormValues>, value as never);
     }
     // Trigger recalculation of amount by triggering the fields if needed, 
     // or useEffect on amount handles it automatically in this codebase.
-    trigger(`items.${rowIndex}` as Path<InvoiceFormValues>);
+    trigger(`items.${rowIndex}` as Path<DocumentFormValues>);
 
     // Move focus to Qty field
     setTimeout(() => {
@@ -256,6 +271,8 @@ function SortableRow({
     opacity: isDragging ? 0.8 : 1,
   };
 
+  const itemId = watch(`items.${index}.item_id`);
+  const ui = docUi(docType);
   const qty = watch(`items.${index}.quantity`) || 0;
   const price = watch(`items.${index}.unit_price`) || 0;
   const disc = watch(`items.${index}.discount_percent`) || 0;
@@ -294,22 +311,47 @@ function SortableRow({
           onChange={(val) => setValue(`items.${index}.description`, val)}
           onSelect={(item) => handleInventorySelect(index, item)}
         />
-        {showBookMetadata && (
-          <div className="mt-1 flex gap-1">
-            <input
-              {...register(`items.${index}.isbn`)}
-              placeholder="ISBN"
-              className={`${inputCls} text-xs`}
-              style={{ flex: 1 }}
-            />
-            <input
-              {...register(`items.${index}.author`)}
-              placeholder="Author"
-              className={`${inputCls} text-xs`}
-              style={{ flex: 1 }}
-            />
-          </div>
-        )}
+        <div className="mt-1 flex items-center gap-1">
+          {itemId ? (
+            <span className="inline-flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary whitespace-nowrap" title={ui.stock === 'none' ? 'Linked to inventory' : 'Linked to inventory — saving updates stock'}>
+              <Package className="h-3 w-3" />
+              Stock item
+              <button
+                type="button"
+                aria-label="Unlink from inventory"
+                onClick={() => setValue(`items.${index}.item_id`, null)}
+                className="hover:text-danger"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ) : ui.stock !== 'none' ? (
+            <span className="text-[10px] text-text-2 whitespace-nowrap" title="Pick the book from the suggestions to track its stock">Not in stock list</span>
+          ) : null}
+          <input
+            {...register(`items.${index}.binding`)}
+            list="binding-options"
+            placeholder="Binding"
+            className={`${inputCls} text-xs`}
+            style={{ flex: 1, minWidth: 0 }}
+          />
+          {showBookMetadata && (
+            <>
+              <input
+                {...register(`items.${index}.isbn`)}
+                placeholder="ISBN"
+                className={`${inputCls} text-xs`}
+                style={{ flex: 1, minWidth: 0 }}
+              />
+              <input
+                {...register(`items.${index}.author`)}
+                placeholder="Author"
+                className={`${inputCls} text-xs`}
+                style={{ flex: 1, minWidth: 0 }}
+              />
+            </>
+          )}
+        </div>
       </td>
 
       {/* HSN/SAC */}
@@ -345,6 +387,21 @@ function SortableRow({
           className={`${inputCls} text-center`}
         />
       </td>
+
+      {/* Damaged (purchases & returns) */}
+      {ui.tracksDamage && (
+        <td className="px-1 py-1 w-16">
+          <input
+            {...register(`items.${index}.damaged_qty`, { valueAsNumber: true })}
+            type="number"
+            min="0"
+            step="1"
+            placeholder="0"
+            title="Copies received/returned damaged (e.g. print defects)"
+            className={`${inputCls} text-center text-red-600`}
+          />
+        </td>
+      )}
 
       {/* Rate per Pcs */}
       <td className="px-1 py-1 w-24">
@@ -393,13 +450,15 @@ function SortableRow({
 
 interface LineItemsTableProps {
   currency?: string;
+  docType?: DocType;
 }
 
-export function LineItemsTable({}: LineItemsTableProps) {
+export function LineItemsTable({ docType = 'sales_invoice' }: LineItemsTableProps) {
+  const ui = docUi(docType);
   const [inventoryModalOpen, setInventoryModalOpen] = useState(false);
   const { data: settings } = useSettings();
   const showBookMetadata = settings?.show_book_metadata ?? false;
-  const { control } = useFormContext<InvoiceFormValues>();
+  const { control } = useFormContext<DocumentFormValues>();
   const { fields, append, remove, move } = useFieldArray({
     control,
     name: 'items',
@@ -429,6 +488,9 @@ export function LineItemsTable({}: LineItemsTableProps) {
       hsn_sac: '',
       gst_rate: 18,
       discount_percent: 0,
+      item_id: null,
+      binding: '',
+      damaged_qty: 0,
     });
   };
 
@@ -437,7 +499,7 @@ export function LineItemsTable({}: LineItemsTableProps) {
   return (
     <div className="space-y-3">
       <div className="border border-border rounded-lg overflow-x-auto">
-        <table className="w-full text-sm min-w-[800px]">
+        <table className="w-full text-sm min-w-[860px]">
           <thead>
             <tr className="bg-surface dark:bg-[#0F0E17] border-b border-border">
               <th className="px-1 py-2 w-6" />
@@ -446,7 +508,8 @@ export function LineItemsTable({}: LineItemsTableProps) {
               <th className={`${thCls} w-24 text-center`}>HSN/SAC</th>
               <th className={`${thCls} w-20 text-center`}>GST Rate (%)</th>
               <th className={`${thCls} w-16 text-center`}>Qty</th>
-              <th className={`${thCls} w-24 text-right`}>Rate per Pcs</th>
+              {ui.tracksDamage && <th className={`${thCls} w-16 text-center text-red-600`} title="Damaged copies">Damaged</th>}
+              <th className={`${thCls} w-24 text-right`}>{ui.usesPurchaseRate ? 'Purchase Rate' : 'Rate per Pcs'}</th>
               <th className={`${thCls} w-16 text-center`}>Disc. %</th>
               <th className={`${thCls} w-28 text-right`}>Amount</th>
               <th className="px-1 py-2 w-8" />
@@ -462,6 +525,7 @@ export function LineItemsTable({}: LineItemsTableProps) {
                     index={index}
                     onRemove={() => remove(index)}
                     showBookMetadata={showBookMetadata}
+                    docType={docType}
                   />
                 ))}
               </tbody>
@@ -496,20 +560,24 @@ export function LineItemsTable({}: LineItemsTableProps) {
         open={inventoryModalOpen}
         onClose={() => setInventoryModalOpen(false)}
         onAddItem={(item) => {
+          const line = lineFromInventory(item, docType);
           append({
-            description: item.book_title,
             quantity: 1,
-            unit_price: item.price > 0 ? item.price : 0,
-            amount: item.price > 0 ? item.price : 0,
+            unit_price: 0,
+            amount: 0,
             sort_order: fields.length,
-            hsn_sac: '',
-            gst_rate: item.gst_rate || 0,
             discount_percent: 0,
-            isbn: item.isbn ?? '',
-            author: item.author ?? '',
+            damaged_qty: 0,
+            ...line,
+            description: item.book_title,
+            hsn_sac: line.hsn_sac ?? '',
+            gst_rate: item.gst_rate || 0,
           });
         }}
       />
+      <datalist id="binding-options">
+        {BINDING_OPTIONS.map((b) => <option key={b} value={b} />)}
+      </datalist>
     </div>
   );
 }

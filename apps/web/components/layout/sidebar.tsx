@@ -14,29 +14,95 @@ import {
   ChevronRight,
   Zap,
   Package,
-  TrendingUp,
   ShoppingCart,
   Printer,
+  FileSpreadsheet,
+  Truck,
+  Undo2,
+  FileMinus,
+  FilePlus,
+  BookCopy,
+  Redo2,
+  Receipt,
+  Wallet,
+  Clock,
+  BarChart3,
+  Boxes,
+  type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
 import { usePermissions } from '@/hooks/use-permissions';
+import { useDocuments } from '@/hooks/use-documents';
+import { docPath } from '@/lib/doc-types';
+
+interface NavItem {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  badge?: number;
+}
+
+interface NavGroup {
+  title?: string;
+  items: NavItem[];
+}
 
 export function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const { user, logout } = useAuth();
-  const { role } = usePermissions();
+  const { role, can } = usePermissions();
 
-  const navItems = [
-    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/sales', label: 'Sales', icon: TrendingUp },
-    { href: '/purchases', label: 'Purchases', icon: ShoppingCart },
-    { href: '/invoices', label: 'Invoices', icon: FileText },
-    { href: '/clients', label: 'Clients', icon: Users },
-    { href: '/inventory', label: 'Inventory', icon: Package },
-    { href: '/cheque-print', label: 'Cheque Print', icon: Printer },
-    { href: '/settings', label: 'Settings', icon: Settings },
+  // Owners/admins see how many returns are waiting for them.
+  const canApprove = can('approvals', 'approve');
+  const { data: pending } = useDocuments({ type: 'sales_return', approval_status: 'pending', limit: 1 }, canApprove);
+
+  const groups: NavGroup[] = [
+    { items: [{ href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }] },
+    {
+      title: 'Sales',
+      items: [
+        { href: docPath('sales_invoice'), label: 'Sales Invoices', icon: FileText },
+        { href: docPath('estimate'), label: 'Estimates', icon: FileSpreadsheet },
+        { href: docPath('delivery_challan'), label: 'Delivery Challans', icon: Truck },
+        { href: docPath('sales_return'), label: 'Sales Returns', icon: Undo2, badge: canApprove ? pending?.total : undefined },
+        { href: docPath('credit_note'), label: 'Credit Notes', icon: FileMinus },
+      ],
+    },
+    {
+      title: 'Purchase',
+      items: [
+        { href: docPath('purchase_bill'), label: 'Purchase Bills', icon: ShoppingCart },
+        { href: docPath('binding_order'), label: 'Binding Orders', icon: BookCopy },
+        { href: docPath('purchase_return'), label: 'Purchase Returns', icon: Redo2 },
+        { href: docPath('debit_note'), label: 'Debit Notes', icon: FilePlus },
+        { href: '/purchases', label: 'Quick Purchases', icon: Receipt },
+      ],
+    },
+    {
+      title: 'Accounts',
+      items: [
+        { href: '/clients', label: 'Parties & Ledger', icon: Users },
+        { href: '/payments', label: 'Payments', icon: Wallet },
+        { href: '/outstanding', label: 'Outstanding', icon: Clock },
+        ...(can('reports', 'read') ? [{ href: '/reports', label: 'Reports', icon: BarChart3 }] : []),
+      ],
+    },
+    {
+      title: 'Stock',
+      items: [
+        { href: '/stock', label: 'In Stock', icon: Boxes },
+        { href: '/inventory', label: 'Items', icon: Package },
+      ],
+    },
+    {
+      title: 'Tools',
+      items: [
+        { href: '/cheque-print', label: 'Cheque Print', icon: Printer },
+        { href: '/settings', label: 'Settings', icon: Settings },
+      ],
+    },
   ];
 
   const handleLogout = () => {
@@ -61,7 +127,7 @@ export function Sidebar() {
         className={cn(
           'fixed left-0 top-0 h-screen bg-[#1A1825] z-40 flex flex-col transition-all duration-300 ease-in-out',
           collapsed ? 'w-16' : 'w-60',
-          'lg:relative'
+          'lg:sticky lg:top-0'
         )}
       >
         {/* Logo */}
@@ -101,39 +167,55 @@ export function Sidebar() {
           </AnimatePresence>
         </div>
 
-        <nav className="flex-1 py-4 px-2 space-y-1">
-          {navItems.map((item) => {
-            const isActive = pathname.startsWith(item.href.split('?')[0]);
-            const Icon = item.icon;
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  'flex items-center gap-3 px-3 h-10 rounded-lg text-sm font-medium transition-all duration-200',
-                  isActive
-                    ? 'bg-primary text-white shadow-lg shadow-primary/25'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5',
-                  collapsed && 'justify-center px-0'
-                )}
-              >
-                <Icon className="h-5 w-5 flex-shrink-0" />
-                <AnimatePresence>
-                  {!collapsed && (
-                    <motion.span
-                      initial={{ opacity: 0, width: 0 }}
-                      animate={{ opacity: 1, width: 'auto' }}
-                      exit={{ opacity: 0, width: 0 }}
-                      className="whitespace-nowrap overflow-hidden"
-                    >
-                      {item.label}
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-              </Link>
-            );
-          })}
+        <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-3">
+          {groups.map((group, gi) => (
+            <div key={group.title ?? gi} className="space-y-0.5">
+              {group.title && !collapsed && (
+                <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-gray-500">{group.title}</p>
+              )}
+              {group.title && collapsed && <div className="mx-3 my-2 h-px bg-white/10" />}
+              {group.items.map((item) => {
+                const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    title={collapsed ? item.label : undefined}
+                    className={cn(
+                      'relative flex items-center gap-3 px-3 h-9 rounded-lg text-sm font-medium transition-all duration-200',
+                      isActive
+                        ? 'bg-primary text-white shadow-lg shadow-primary/25'
+                        : 'text-gray-400 hover:text-white hover:bg-white/5',
+                      collapsed && 'justify-center px-0'
+                    )}
+                  >
+                    <Icon className="h-[18px] w-[18px] flex-shrink-0" />
+                    <AnimatePresence>
+                      {!collapsed && (
+                        <motion.span
+                          initial={{ opacity: 0, width: 0 }}
+                          animate={{ opacity: 1, width: 'auto' }}
+                          exit={{ opacity: 0, width: 0 }}
+                          className="whitespace-nowrap overflow-hidden"
+                        >
+                          {item.label}
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+                    {!!item.badge && (
+                      <span className={cn(
+                        'ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-amber-500 text-[11px] font-bold text-white flex items-center justify-center',
+                        collapsed && 'absolute -top-1 -right-1 ml-0'
+                      )}>
+                        {item.badge}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         {/* Bottom section */}
