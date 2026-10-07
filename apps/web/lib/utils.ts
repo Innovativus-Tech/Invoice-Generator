@@ -124,6 +124,11 @@ export const statusConfig: Record<InvoiceStatus, { label: string; className: str
     className: 'bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500',
     dotColor: 'bg-gray-300',
   },
+  converted: {
+    label: 'Converted',
+    className: 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
+    dotColor: 'bg-teal-500',
+  },
 };
 
 // Generate initials from name
@@ -178,4 +183,87 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
     clearTimeout(timeoutId);
     timeoutId = setTimeout(() => fn(...args), delay);
   };
+}
+
+/** ₹ amount in Indian grouping, e.g. 265000 → "₹2,65,000" (paise shown only when present). */
+export function inr(amount: number | null | undefined, opts: { decimals?: boolean } = {}): string {
+  const n = Number(amount) || 0;
+  const hasPaise = Math.round(Math.abs(n) * 100) % 100 !== 0;
+  const digits = (opts.decimals ?? hasPaise) ? 2 : 0;
+  return `${n < 0 ? '-' : ''}₹${new Intl.NumberFormat('en-IN', { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(Math.abs(n))}`;
+}
+
+/** Compact ₹ for charts and tiles, e.g. 1250000 → "₹12.5L". */
+export function inrCompact(amount: number | null | undefined): string {
+  const n = Number(amount) || 0;
+  const abs = Math.abs(n);
+  const sign = n < 0 ? '-' : '';
+  if (abs >= 1e7) return `${sign}₹${(abs / 1e7).toFixed(abs >= 1e8 ? 0 : 1)}Cr`;
+  if (abs >= 1e5) return `${sign}₹${(abs / 1e5).toFixed(abs >= 1e6 ? 0 : 1)}L`;
+  if (abs >= 1e3) return `${sign}₹${(abs / 1e3).toFixed(abs >= 1e4 ? 0 : 1)}K`;
+  return `${sign}₹${Math.round(abs)}`;
+}
+
+/** "1 bill", "3 bills". */
+export function plural(n: number, one: string, many = `${one}s`): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/** Party balance with Dr/Cr suffix: + receivable (Dr), − payable (Cr). */
+export function balanceLabel(balance: number | null | undefined): string {
+  const n = Number(balance) || 0;
+  if (Math.abs(n) < 0.005) return '₹0';
+  return `${inr(Math.abs(n))} ${n > 0 ? 'Dr' : 'Cr'}`;
+}
+
+/** Today as YYYY-MM-DD in the browser's timezone. */
+export function todayISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+export function addDaysISO(iso: string, days: number): string {
+  if (!iso) return '';
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Whole days from today until `iso` (negative when in the past). */
+export function daysUntil(iso: string | null | undefined): number {
+  if (!iso) return 0;
+  const a = Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10));
+  const t = todayISO();
+  const b = Date.UTC(+t.slice(0, 4), +t.slice(5, 7) - 1, +t.slice(8, 10));
+  return Math.round((a - b) / 86_400_000);
+}
+
+/** Short date for tables: "07 Oct 2026". */
+export function shortDate(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? '—' : format(d, 'dd MMM yyyy');
+}
+
+/** Download rows as a CSV file (Excel-friendly). */
+export function downloadCsv(filename: string, rows: (string | number | null | undefined)[][]) {
+  const escape = (v: string | number | null | undefined) => {
+    const s = v == null ? '' : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const csv = '\uFEFF' + rows.map((r) => r.map(escape).join(',')).join('\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** Extracts the API error message from an axios error. */
+export function apiError(error: unknown, fallback = 'Something went wrong'): string {
+  const err = error as { response?: { data?: { error?: { message?: string } } }; message?: string };
+  return err?.response?.data?.error?.message || err?.message || fallback;
 }

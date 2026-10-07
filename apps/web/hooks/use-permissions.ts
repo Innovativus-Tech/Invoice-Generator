@@ -4,12 +4,18 @@ import { useAuth } from '@/hooks/use-auth';
 
 type Role = 'owner' | 'admin' | 'staff';
 
+// Mirrors apps/api/src/middleware/rbac.middleware.ts. `invoices` covers every
+// sales document; `purchases` covers purchase bills, returns, debit notes and
+// binding orders.
 const PERMISSIONS: Record<Role, Record<string, string[]>> = {
   owner: {
     invoices: ['create', 'read', 'update', 'delete', 'send'],
     clients: ['create', 'read', 'update', 'delete'],
     inventory: ['create', 'read', 'update', 'delete'],
-    purchases: ['create', 'read', 'update', 'delete'],
+    purchases: ['create', 'read', 'update', 'delete', 'send'],
+    payments: ['create', 'read', 'update', 'delete'],
+    approvals: ['approve'],
+    reports: ['read'],
     sales: ['read'],
     settings: ['read', 'update'],
     team: ['invite', 'remove', 'change_role'],
@@ -18,7 +24,10 @@ const PERMISSIONS: Record<Role, Record<string, string[]>> = {
     invoices: ['create', 'read', 'update', 'delete', 'send'],
     clients: ['create', 'read', 'update', 'delete'],
     inventory: ['create', 'read', 'update', 'delete'],
-    purchases: ['create', 'read', 'update', 'delete'],
+    purchases: ['create', 'read', 'update', 'delete', 'send'],
+    payments: ['create', 'read', 'update', 'delete'],
+    approvals: ['approve'],
+    reports: ['read'],
     sales: ['read'],
     settings: ['read', 'update'],
     team: ['invite'],
@@ -28,6 +37,9 @@ const PERMISSIONS: Record<Role, Record<string, string[]>> = {
     clients: ['create', 'read', 'update'],
     inventory: ['read'],
     purchases: ['create', 'read'],
+    payments: ['create', 'read'],
+    approvals: [],
+    reports: ['read'],
     sales: ['read'],
     settings: ['read'],
     team: [],

@@ -3,17 +3,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import apiClient from '@/lib/api-client';
-import type { Profile, SettingsFormValues, DashboardStats, RevenueDataPoint, ApiResponse } from '@/types';
+import type { Profile, SettingsFormValues, ApiResponse, NumberSeries } from '@/types';
+import { apiError } from '@/lib/utils';
 
 export const settingsKeys = {
   all: ['settings'] as const,
   profile: () => [...settingsKeys.all, 'profile'] as const,
-};
-
-export const dashboardKeys = {
-  all: ['dashboard'] as const,
-  stats: () => [...dashboardKeys.all, 'stats'] as const,
-  revenue: (period: string) => [...dashboardKeys.all, 'revenue', period] as const,
 };
 
 // Settings / Profile
@@ -89,23 +84,30 @@ export function useUploadSignature() {
   });
 }
 
-// Dashboard
-export function useDashboardStats() {
+// Document numbering (separate series per document type)
+export function useNumbering() {
   return useQuery({
-    queryKey: dashboardKeys.stats(),
+    queryKey: [...settingsKeys.all, 'numbering'],
     queryFn: async () => {
-      const { data } = await apiClient.get<ApiResponse<DashboardStats>>('/dashboard/stats');
-      return data.data;
+      const { data } = await apiClient.get<ApiResponse<NumberSeries[]>>('/settings/numbering');
+      return data.data || [];
     },
   });
 }
 
-export function useRevenueChart(period: string = '6m') {
-  return useQuery({
-    queryKey: dashboardKeys.revenue(period),
-    queryFn: async () => {
-      const { data } = await apiClient.get<ApiResponse<RevenueDataPoint[]>>(`/dashboard/revenue?period=${period}`);
+export function useUpdateNumbering() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (series: Pick<NumberSeries, 'doc_type' | 'prefix' | 'next_number' | 'include_year'>[]) => {
+      const { data } = await apiClient.put<ApiResponse<NumberSeries[]>>('/settings/numbering', { series });
       return data.data || [];
     },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: settingsKeys.all });
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      toast.success('Numbering saved');
+    },
+    onError: (err) => toast.error(apiError(err, 'Could not save numbering')),
   });
 }

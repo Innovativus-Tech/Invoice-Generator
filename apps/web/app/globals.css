@@ -10,6 +10,9 @@
   --border: #E4E2F0;
   --text-1: #1A1825;
   --text-2: #6B6880;
+  /* Chart series (validated categorical slots 1–2, light) */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
 }
 
 .dark {
@@ -18,6 +21,9 @@
   --border: #2D2B3D;
   --text-1: #F1EFF8;
   --text-2: #9B98AE;
+  /* Chart series (same hues stepped for the dark surface) */
+  --series-1: #3987e5;
+  --series-2: #d95926;
 }
 
 * {
