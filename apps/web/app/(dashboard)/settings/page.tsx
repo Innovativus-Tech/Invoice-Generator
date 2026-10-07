@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Building, Mail, Phone, MapPin, FileText, Bell, Upload, Save, Globe, CreditCard, Landmark, Users, UserPlus, Trash2 } from 'lucide-react';
+import { Building, Mail, Phone, MapPin, FileText, Bell, Upload, Save, Globe, CreditCard, Landmark, Users, UserPlus, Trash2, Hash } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
+import { NumberingSettings } from '@/components/settings/numbering-settings';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -24,7 +25,7 @@ export default function SettingsPage() {
   const canInvite = can('team', 'invite');
   const canRemove = can('team', 'remove');
   const canChangeRole = can('team', 'change_role');
-  const [activeTab, setActiveTab] = useState<'profile' | 'defaults' | 'notifications' | 'team'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'defaults' | 'numbering' | 'notifications' | 'team'>('profile');
   const { data: settings, isLoading } = useSettings();
   const updateSettings = useUpdateSettings();
   const uploadLogo = useUploadLogo();
@@ -145,6 +146,7 @@ export default function SettingsPage() {
   const tabs = [
     { id: 'profile' as const, label: 'Business Profile', icon: Building },
     { id: 'defaults' as const, label: 'Invoice Defaults', icon: FileText },
+    { id: 'numbering' as const, label: 'Numbering', icon: Hash },
     { id: 'notifications' as const, label: 'Notifications', icon: Bell },
     ...(isOwner || isAdmin ? [{ id: 'team' as const, label: 'Team', icon: Users }] : []),
   ];
@@ -530,6 +532,8 @@ export default function SettingsPage() {
           </Card>
         )}
 
+        {activeTab === 'numbering' && <NumberingSettings canEdit={canUpdateSettings} />}
+
         {activeTab === 'notifications' && (
           <Card>
             <h3 className="text-lg font-semibold text-text-1 mb-6">Notification Preferences</h3>
@@ -714,7 +718,7 @@ export default function SettingsPage() {
       </motion.div>
 
       {/* Floating save button */}
-      {canUpdateSettings && activeTab !== 'team' && (
+      {canUpdateSettings && activeTab !== 'team' && activeTab !== 'numbering' && (
       <div className="fixed bottom-6 right-6 z-30">
         <Button
           onClick={handleSave}

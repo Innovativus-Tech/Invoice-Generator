@@ -9,7 +9,9 @@ import {
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar,
 } from 'recharts';
+import Link from 'next/link';
 import { PageHeader } from '@/components/layout/page-header';
+import { docPath } from '@/lib/doc-types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -304,13 +306,21 @@ export default function PurchasesPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <PageHeader title="Purchases" description="Track your expenses and purchase orders" />
+        <PageHeader
+          title="Quick Purchases"
+          description="One-line purchases and expenses (no stock effect). For books from binders or suppliers use Purchase Bills."
+        />
         <div className="flex gap-2">
           {can('purchases', 'create') && <Button onClick={openAdd} icon={<Plus className="h-4 w-4" />}>Add Purchase</Button>}
           <Button variant="secondary" onClick={handleExportPdf} loading={exporting} icon={<Download className="h-4 w-4" />}>
             Export PDF
           </Button>
         </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5 text-sm text-text-1">
+        <span>Buying books that should go into stock (with binding, damaged copies and the binder&apos;s rate)?</span>
+        <Link href={docPath('purchase_bill')} className="font-medium text-primary hover:underline whitespace-nowrap">Go to Purchase Bills →</Link>
       </div>
 
       {/* Month/Year Picker */}

@@ -33,6 +33,17 @@ QuickInvoice is a comprehensive solution designed to streamline the billing proc
 - **Inventory Tracking**: (Experimental) Keep track of your products and services for faster invoicing.
 - **Bulk Import**: Support for CSV-based inventory imports.
 
+### 📚 Billing for the book trade
+- **Every trading document**: Sales Invoices, Estimates (approximate bills), Delivery Challans, Sales Returns, Credit Notes, Purchase Bills, Binding Orders, Purchase Returns and Debit Notes — each with its **own number series**, and one-click conversion (estimate → invoice, challan → invoice, binding order → purchase bill, invoice → return).
+- **Cash or credit** chosen first on every bill; credit bills take the party's **credit days** to set the due date.
+- **Extra discount** (% or ₹), **postage / delivery charges**, other charges and round-off — totals are recomputed on the server.
+- **Dispatch tracking**: courier & tracking number, or transport name, LR/bilty no., cartons, freight paid / to-pay, door or godown delivery, with dispatch and delivery dates.
+- **Billing & shipping addresses** per party and per bill.
+- **Sales return approval**: returns change stock and the party's balance only after an owner/admin approves them.
+- **Stock ledger**: every sale, purchase, return and adjustment is recorded; damaged copies (e.g. print defects from the binder) are kept apart from saleable stock; reorder alerts; binder purchase rates.
+- **Party ledger & outstanding**: running Dr/Cr balance, receipts and payments, bill-wise outstanding with days overdue and aging.
+- **Reports**: monthly, yearly and financial-year sales & purchase summary with PDF/CSV export, and a business dashboard.
+
 ### ⚙️ Business Personalization
 - **Profile Management**: Custom business details including logo, address, and contact info.
 - **Smart Defaults**: Configure default currency, payment terms, and invoice prefixes.
@@ -105,6 +116,8 @@ FRONTEND_URL=http://localhost:3000
 ### 3. Database Initialization
 Run the following script in your Supabase SQL Editor to set up the schema:
 - `supabase/setup_fresh_database.sql`
+
+**Upgrading an existing database?** Run `supabase/migrations/020_billing_erp.sql` once in the SQL Editor. It is safe to re-run: existing invoices become sales invoices, invoices already marked paid get a matching payment, "Net N" terms become credit days, and current stock is recorded as opening stock.
 
 ### 4. Running Locally
 ```bash
