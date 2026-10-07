@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderToBuffer } from '@react-pdf/renderer';
 import { Document, Page, View, Text, Image, StyleSheet } from '@react-pdf/renderer';
+import { getImageAsBase64 } from './pdf.service.js';
 
 const NAVY = '#1E293B';
 const GRAY = '#64748B';
@@ -191,6 +192,132 @@ function PurchaseReportDoc({ data, profile, month, year }: {
   );
 }
 
+
+// ─── Period Report (monthly / yearly / financial year) ───────────────────────
+
+function KV({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
+  return React.createElement(View, { style: { flexDirection: 'row' as any, justifyContent: 'space-between' as any, paddingVertical: 3, borderBottomWidth: 0.5, borderBottomColor: BORDER } },
+    React.createElement(Text, { style: { fontSize: 8, color: bold ? NAVY : GRAY, fontFamily: bold ? 'Helvetica-Bold' : 'Helvetica' } }, label),
+    React.createElement(Text, { style: { fontSize: 8, color: NAVY, fontFamily: bold ? 'Helvetica-Bold' : 'Helvetica' } }, value)
+  );
+}
+
+function SimpleTable({ columns, rows }: { columns: { label: string; width?: number; align?: 'left' | 'right' | 'center' }[]; rows: string[][] }) {
+  const cell = (c: { width?: number; align?: string }) => ({
+    ...(c.width ? { width: c.width } : { flex: 1 }),
+    textAlign: (c.align ?? 'left') as any,
+    paddingHorizontal: 4,
+  });
+  return React.createElement(View, {},
+    React.createElement(View, { style: rs.tableHeader },
+      ...columns.map((c, i) => React.createElement(Text, { key: i, style: { ...rs.tableHeaderCell, ...cell(c) } }, c.label))
+    ),
+    ...(rows.length
+      ? rows.map((r, ri) => React.createElement(View, { key: ri, style: rs.tableRow, wrap: false },
+          ...r.map((v, ci) => React.createElement(Text, { key: ci, style: { ...rs.tableCell, ...cell(columns[ci]) } }, v))
+        ))
+      : [React.createElement(Text, { key: 'empty', style: { fontSize: 8, color: GRAY, padding: 8 } }, 'No data for this period')])
+  );
+}
+
+function PeriodReportDoc({ data, profile }: { data: any; profile: ReportProfile }) {
+  const generatedDate = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+  const periodName = data.period === 'month' ? 'Monthly' : data.period === 'fy' ? 'Financial Year' : 'Yearly';
+  const s = data.sales;
+  const p = data.purchases;
+  const card = (label: string, value: string) =>
+    React.createElement(View, { style: rs.card },
+      React.createElement(Text, { style: rs.cardLabel }, label),
+      React.createElement(Text, { style: rs.cardValue }, value)
+    );
+
+  return React.createElement(Document, {},
+    React.createElement(Page, { size: 'A4', style: rs.page },
+      React.createElement(View, { style: rs.header },
+        React.createElement(View, { style: rs.headerLeft },
+          profile.logo_url ? React.createElement(Image, { src: profile.logo_url, style: rs.logo }) : null,
+          React.createElement(View, {},
+            React.createElement(Text, { style: rs.companyName }, profile.business_name || 'QuickInvoice'),
+            React.createElement(Text, { style: rs.reportSubtitle }, profile.gstin ? `GSTIN: ${profile.gstin}` : '')
+          )
+        ),
+        React.createElement(View, { style: { alignItems: 'flex-end' as any } },
+          React.createElement(Text, { style: rs.reportTitle }, 'Sales & Purchase Report'),
+          React.createElement(Text, { style: rs.reportSubtitle }, `${periodName} · ${data.label} (${data.from} to ${data.to})`),
+          React.createElement(Text, { style: { ...rs.reportSubtitle, marginTop: 2 } }, `Generated: ${generatedDate}`)
+        )
+      ),
+      React.createElement(View, { style: rs.cardsRow },
+        card('Net Sales', formatINR(s.net)),
+        card('Net Purchases', formatINR(p.net)),
+        card('Collections', formatINR(data.collections)),
+        card('Est. Gross Margin', formatINR(data.margin.gross_margin))
+      ),
+      React.createElement(View, { style: { flexDirection: 'row' as any, gap: 16 } },
+        React.createElement(View, { style: { flex: 1 } },
+          React.createElement(Text, { style: rs.sectionTitle }, 'Sales'),
+          React.createElement(KV, { label: `Sales invoices (${s.count})`, value: formatINR(s.gross) }),
+          React.createElement(KV, { label: 'Cash sales', value: formatINR(s.cash) }),
+          React.createElement(KV, { label: 'Credit sales', value: formatINR(s.credit) }),
+          React.createElement(KV, { label: 'Extra discount given', value: formatINR(s.discount) }),
+          React.createElement(KV, { label: 'GST collected', value: formatINR(s.tax) }),
+          React.createElement(KV, { label: 'Postage / delivery charged', value: formatINR(s.postage) }),
+          React.createElement(KV, { label: `Sales returns (${s.returns_count})`, value: `- ${formatINR(s.returns)}` }),
+          React.createElement(KV, { label: 'Credit notes', value: `- ${formatINR(s.credit_notes)}` }),
+          React.createElement(KV, { label: 'Net sales', value: formatINR(s.net), bold: true })
+        ),
+        React.createElement(View, { style: { flex: 1 } },
+          React.createElement(Text, { style: rs.sectionTitle }, 'Purchases'),
+          React.createElement(KV, { label: `Purchase bills (${p.count})`, value: formatINR(p.gross) }),
+          React.createElement(KV, { label: 'Cash purchases', value: formatINR(p.cash) }),
+          React.createElement(KV, { label: 'Credit purchases', value: formatINR(p.credit) }),
+          React.createElement(KV, { label: 'Copies received / damaged', value: `${p.qty} / ${p.damaged_qty}` }),
+          React.createElement(KV, { label: `Purchase returns (${p.returns_count})`, value: `- ${formatINR(p.returns)}` }),
+          React.createElement(KV, { label: 'Debit notes', value: `- ${formatINR(p.debit_notes)}` }),
+          React.createElement(KV, { label: 'Net purchases', value: formatINR(p.net), bold: true }),
+          React.createElement(KV, { label: `Quick purchases / expenses (${p.quick_purchase_count})`, value: formatINR(p.quick_purchases) }),
+          React.createElement(KV, { label: 'Payments made', value: formatINR(data.payments_out) })
+        )
+      ),
+      React.createElement(Text, { style: rs.sectionTitle }, data.period === 'month' ? 'Day-wise Breakdown' : 'Month-wise Breakdown'),
+      React.createElement(SimpleTable, {
+        columns: [
+          { label: data.period === 'month' ? 'Day' : 'Month', width: 60 },
+          { label: 'Sales', align: 'right' }, { label: 'Returns', align: 'right' }, { label: 'Net Sales', align: 'right' },
+          { label: 'Purchases', align: 'right' }, { label: 'Collections', align: 'right' },
+        ],
+        rows: data.breakdown
+          .filter((b: any) => data.period !== 'month' || b.sales || b.purchases || b.sales_returns || b.collections)
+          .map((b: any) => [b.label, formatINR(b.sales), formatINR(b.sales_returns), formatINR(b.net_sales), formatINR(b.purchases), formatINR(b.collections)]),
+      }),
+      React.createElement(Text, { style: rs.sectionTitle }, 'Top Customers'),
+      React.createElement(SimpleTable, {
+        columns: [{ label: 'Party' }, { label: 'Bills', width: 40, align: 'center' }, { label: 'Sales', width: 80, align: 'right' }, { label: 'Returns', width: 70, align: 'right' }, { label: 'Net', width: 80, align: 'right' }],
+        rows: data.top_customers.map((c: any) => [c.name, String(c.count), formatINR(c.sales), formatINR(c.returns), formatINR(c.net)]),
+      }),
+      React.createElement(Text, { style: rs.sectionTitle }, 'Top Suppliers / Binders'),
+      React.createElement(SimpleTable, {
+        columns: [{ label: 'Party' }, { label: 'Bills', width: 40, align: 'center' }, { label: 'Purchases', width: 80, align: 'right' }, { label: 'Returns', width: 70, align: 'right' }, { label: 'Net', width: 80, align: 'right' }],
+        rows: data.top_suppliers.map((c: any) => [c.name, String(c.count), formatINR(c.purchases), formatINR(c.returns), formatINR(c.net)]),
+      }),
+      React.createElement(Text, { style: rs.sectionTitle }, 'Best-selling Titles'),
+      React.createElement(SimpleTable, {
+        columns: [{ label: 'Title' }, { label: 'Copies', width: 60, align: 'right' }, { label: 'Amount', width: 90, align: 'right' }],
+        rows: data.top_items.map((i: any) => [i.description, String(i.qty), formatINR(i.amount)]),
+      }),
+      React.createElement(View, { style: { marginTop: 10, paddingTop: 8, borderTopWidth: 0.5, borderTopColor: '#CBD5E1' } },
+        React.createElement(Text, { style: { fontSize: 7.5, fontFamily: 'Helvetica-Oblique', color: '#6B7280' } },
+          'Gross margin is estimated from the current purchase rate of each title and covers only lines linked to inventory. Pending (unapproved) and cancelled documents are excluded.'
+        )
+      ),
+      React.createElement(View, { style: rs.footer, fixed: true },
+        React.createElement(Text, { style: rs.footerText }, profile.business_name || 'QuickInvoice'),
+        React.createElement(Text, { style: rs.footerText, render: ({ pageNumber, totalPages }: any) => `Page ${pageNumber} of ${totalPages}` })
+      )
+    )
+  );
+}
+
 export class ReportService {
   async generateSalesReport(data: any, profile: ReportProfile, month: number, year: number): Promise<Buffer> {
     const doc = SalesReportDoc({ data, profile, month, year }) as React.ReactElement;
@@ -200,6 +327,12 @@ export class ReportService {
   async generatePurchaseReport(data: any, profile: ReportProfile, month: number, year: number): Promise<Buffer> {
     const doc = PurchaseReportDoc({ data, profile, month, year }) as React.ReactElement;
     return renderToBuffer(doc as any);
+  }
+
+  async generatePeriodReport(data: any, profile: ReportProfile): Promise<Buffer> {
+    const logo = await getImageAsBase64(profile.logo_url);
+    const doc = PeriodReportDoc({ data, profile: { ...profile, logo_url: logo ?? undefined } }) as React.ReactElement;
+    return Buffer.from(await renderToBuffer(doc as any));
   }
 }
 

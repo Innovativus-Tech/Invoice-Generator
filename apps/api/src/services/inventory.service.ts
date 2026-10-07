@@ -1,5 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import { cacheGet, cacheSet, cacheDel, CacheKeys } from '../lib/cache.js';
+import { stockService } from './stock.service.js';
+import { parseISODate, todayISO } from '../lib/dates.js';
 import csvParser from 'csv-parser';
 import { Readable } from 'stream';
 
@@ -19,8 +21,39 @@ function mapItem(item: any) {
     publication_date: item.publicationDate,
     price: item.price !== null ? Number(item.price) : 0,
     gst_rate: item.gstRate !== null ? Number(item.gstRate) : 0,
-    stock: item.stock ?? 1,
+    stock: item.stock ?? 0,
+    binding: item.binding ?? null,
+    purchase_rate: item.purchaseRate != null ? Number(item.purchaseRate) : 0,
+    min_stock: item.minStock ?? 0,
+    damaged_stock: item.damagedStock ?? 0,
+    hsn_code: item.hsnCode ?? null,
     created_at: item.createdAt,
+  };
+}
+
+function csvNumber(value: unknown): number {
+  const n = parseFloat(String(value ?? '').replace(/[,₹\s]/g, ''));
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** Columns editable from the inventory form (stock is changed through stock movements). */
+function itemFields(itemData: any) {
+  return {
+    bookTitle: itemData.book_title,
+    isbn: itemData.isbn || null,
+    productForm: itemData.product_form || null,
+    language: itemData.language || null,
+    applicantType: itemData.applicant_type || null,
+    publisher: itemData.publisher || null,
+    imprint: itemData.imprint || null,
+    author: itemData.author || null,
+    publicationDate: itemData.publication_date || null,
+    price: Number(itemData.price) || 0,
+    gstRate: itemData.gst_rate ?? 0,
+    binding: itemData.binding || null,
+    purchaseRate: Math.max(Number(itemData.purchase_rate) || 0, 0),
+    minStock: Math.max(Math.round(Number(itemData.min_stock) || 0), 0),
+    hsnCode: itemData.hsn_code || null,
   };
 }
 
@@ -49,6 +82,11 @@ export class InventoryService {
         price: true,
         gstRate: true,
         stock: true,
+        binding: true,
+        purchaseRate: true,
+        minStock: true,
+        damagedStock: true,
+        hsnCode: true,
         createdAt: true,
       },
     });
@@ -75,7 +113,9 @@ export class InventoryService {
              "Product Form" as "productForm", "Language" as language,
              "Applicant Type" as "applicantType", "Imprint" as imprint,
              "Publication Date" as "publicationDate",
-             price, gst_rate as "gstRate", stock, created_at as "createdAt"
+             price, gst_rate as "gstRate", stock, binding, purchase_rate as "purchaseRate",
+             min_stock as "minStock", damaged_stock as "damagedStock", hsn_code as "hsnCode",
+             created_at as "createdAt"
       FROM inventory_items
       WHERE org_id = ${orgId}::uuid
         AND search_vector @@ to_tsquery('simple', ${tsQuery})
@@ -89,7 +129,9 @@ export class InventoryService {
              "Product Form" as "productForm", "Language" as language,
              "Applicant Type" as "applicantType", "Imprint" as imprint,
              "Publication Date" as "publicationDate",
-             price, gst_rate as "gstRate", stock, created_at as "createdAt"
+             price, gst_rate as "gstRate", stock, binding, purchase_rate as "purchaseRate",
+             min_stock as "minStock", damaged_stock as "damagedStock", hsn_code as "hsnCode",
+             created_at as "createdAt"
       FROM inventory_items
       WHERE org_id = ${orgId}::uuid
         AND "ISBN" ILIKE ${trimmed + '%'}
@@ -105,70 +147,49 @@ export class InventoryService {
       })
       .slice(0, limit);
 
-    return merged.map((row) => ({
-      id: row.id,
-      user_id: row.user_id,
-      org_id: row.org_id,
-      book_title: row.bookTitle,
-      isbn: row.isbn,
-      author: row.author,
-      publisher: row.publisher,
-      product_form: row.productForm,
-      language: row.language,
-      applicant_type: row.applicantType,
-      imprint: row.imprint,
-      publication_date: row.publicationDate,
-      price: row.price !== null ? Number(row.price) : 0,
-      gst_rate: row.gstRate !== null ? Number(row.gstRate) : 0,
-      stock: row.stock ?? 1,
-      created_at: row.createdAt,
-    }));
+    return merged.map((row) => mapItem({ ...row, userId: row.user_id, orgId: row.org_id }));
   }
 
   async createItem(orgId: string, userId: string, itemData: any) {
-    await cacheDel(CacheKeys.inventory(orgId));
-    const item = await prisma.inventoryItem.create({
-      data: {
-        userId,
-        orgId,
-        bookTitle: itemData.book_title,
-        isbn: itemData.isbn || null,
-        productForm: itemData.product_form || null,
-        language: itemData.language || null,
-        applicantType: itemData.applicant_type || null,
-        publisher: itemData.publisher || null,
-        imprint: itemData.imprint || null,
-        author: itemData.author || null,
-        publicationDate: itemData.publication_date || null,
-        price: itemData.price || 0,
-        gstRate: itemData.gst_rate ?? 0,
-        stock: itemData.stock ?? 1,
-      },
+    const openingStock = Math.round(Number(itemData.stock) || 0);
+    const item = await prisma.$transaction(async (tx) => {
+      const created = await tx.inventoryItem.create({
+        data: { userId, orgId, ...itemFields(itemData), stock: 0, damagedStock: 0 },
+      });
+      if (openingStock !== 0) {
+        await stockService.recordOpening(tx, orgId, userId, created.id, openingStock, Number(created.purchaseRate) || Number(created.price) || 0);
+      }
+      return tx.inventoryItem.findUniqueOrThrow({ where: { id: created.id } });
     });
+    await stockService.invalidate(orgId);
     return mapItem(item);
   }
 
-  async updateItem(orgId: string, id: string, itemData: any) {
-    await cacheDel(CacheKeys.inventory(orgId));
-    await prisma.inventoryItem.updateMany({
-      where: { id, orgId },
-      data: {
-        bookTitle: itemData.book_title,
-        isbn: itemData.isbn || null,
-        productForm: itemData.product_form || null,
-        language: itemData.language || null,
-        applicantType: itemData.applicant_type || null,
-        publisher: itemData.publisher || null,
-        imprint: itemData.imprint || null,
-        author: itemData.author || null,
-        publicationDate: itemData.publication_date || null,
-        price: itemData.price || 0,
-        gstRate: itemData.gst_rate ?? 0,
-        stock: itemData.stock ?? 1,
-      },
+  async updateItem(orgId: string, id: string, itemData: any, userId: string | null = null) {
+    const item = await prisma.$transaction(async (tx) => {
+      const existing = await tx.inventoryItem.findFirst({ where: { id, orgId } });
+      if (!existing) throw Object.assign(new Error('Item not found'), { status: 404 });
+      await tx.inventoryItem.update({ where: { id }, data: itemFields({ ...mapItem(existing), ...itemData }) });
+
+      // Editing the stock figure records the difference as an adjustment so the
+      // stock history still adds up.
+      if (itemData.stock !== undefined && itemData.stock !== null && itemData.stock !== '') {
+        const delta = Math.round(Number(itemData.stock)) - (existing.stock ?? 0);
+        if (delta !== 0) {
+          await stockService.applyMovement(tx, orgId, userId, {
+            itemId: id,
+            docType: 'adjustment',
+            date: parseISODate(todayISO()),
+            qtyChange: delta,
+            damagedChange: 0,
+            rate: Number(existing.purchaseRate) || Number(existing.price) || 0,
+            reason: 'Stock corrected from inventory form',
+          });
+        }
+      }
+      return tx.inventoryItem.findUniqueOrThrow({ where: { id } });
     });
-    const item = await prisma.inventoryItem.findFirst({ where: { id, orgId } });
-    if (!item) throw new Error('Item not found');
+    await stockService.invalidate(orgId);
     return mapItem(item);
   }
 
@@ -203,9 +224,13 @@ export class InventoryService {
             imprint: row['Imprint'] || null,
             author: row['Name of Author/Editor'] || null,
             publicationDate: row['Publication Date'] || null,
-            price: 0,
-            gstRate: 0,
-            stock: 1,
+            // Optional columns — catalogue exports usually leave these out.
+            price: csvNumber(row['Price'] ?? row['MRP']),
+            gstRate: csvNumber(row['GST Rate'] ?? row['GST']),
+            purchaseRate: csvNumber(row['Purchase Rate']),
+            binding: (row['Binding'] || '').trim() || null,
+            hsnCode: (row['HSN'] || '').trim() || null,
+            stock: Math.round(csvNumber(row['Stock'] ?? row['Quantity'])),
           });
         })
         .on('end', async () => {
@@ -214,7 +239,26 @@ export class InventoryService {
             let inserted = 0;
             for (let i = 0; i < results.length; i += BATCH_SIZE) {
               const batch = results.slice(i, i + BATCH_SIZE);
-              await prisma.inventoryItem.createMany({ data: batch, skipDuplicates: false });
+              await prisma.$transaction(async (tx) => {
+                const created = await tx.inventoryItem.createManyAndReturn({
+                  data: batch.map((row) => ({ ...row, stock: 0 })),
+                  select: { id: true },
+                });
+                // Record the imported quantity as opening stock (keeps stock = sum of movements).
+                const openings = created
+                  .map((c, idx) => ({ id: c.id, qty: batch[idx].stock as number }))
+                  .filter((o) => o.qty !== 0);
+                if (openings.length > 0) {
+                  await tx.stockMovement.createMany({
+                    data: openings.map((o) => ({
+                      orgId, itemId: o.id, docType: 'opening', qtyChange: o.qty, reason: 'Opening stock (CSV import)', userId,
+                    })),
+                  });
+                  for (const o of openings) {
+                    await tx.inventoryItem.update({ where: { id: o.id }, data: { stock: o.qty } });
+                  }
+                }
+              }, { timeout: 60_000 });
               inserted += batch.length;
             }
             await cacheDel(CacheKeys.inventory(orgId));

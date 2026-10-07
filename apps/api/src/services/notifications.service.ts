@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma.js';
+import { parseISODate, todayISO } from '../lib/dates.js';
 
 export class NotificationService {
   async getNotifications(orgId: string) {
@@ -111,14 +112,14 @@ export class NotificationService {
   }
 
   async checkOverdueInvoices(userId: string, orgId: string) {
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
+    // Credit sales invoices past their due date (issue date + party credit days).
     const invoices = await prisma.invoice.findMany({
       where: {
         orgId,
-        status: 'sent',
-        sentAt: { lt: thirtyDaysAgo },
+        docType: 'sales_invoice',
+        paymentMode: 'credit',
+        status: { notIn: ['paid', 'cancelled', 'converted'] },
+        dueDate: { lt: parseISODate(todayISO()) },
       },
       select: { id: true, invoiceNumber: true },
     });

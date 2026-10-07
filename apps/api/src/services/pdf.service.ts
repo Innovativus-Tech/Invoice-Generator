@@ -120,31 +120,70 @@ interface InvoiceItem {
   discount_percent: number;
   isbn?: string | null;
   author?: string | null;
+  binding?: string | null;
+  damaged_qty?: number | null;
 }
 
 interface SerializedItem extends InvoiceItem {
   serial: number;
 }
 
-interface InvoiceData {
+type Opt<T> = T | null | undefined;
+
+export interface InvoiceData {
+  doc_type?: string;
+  doc_title?: string;
+  doc_label?: string;
+  is_bill?: boolean;
+  side?: 'sales' | 'purchase';
   invoice_number: string;
-  bill_number?: string;
+  bill_number?: Opt<string>;
   status: string;
   issue_date: string;
-
-  order_id?: string;
-  order_date?: string;
+  due_date?: Opt<string>;
+  payment_mode?: string;
+  credit_days?: number;
+  order_id?: Opt<string>;
+  order_date?: Opt<string>;
+  party_ref_number?: Opt<string>;
+  party_ref_date?: Opt<string>;
+  valid_until?: Opt<string>;
+  reason?: Opt<string>;
+  source_doc?: Opt<{ invoice_number: string; doc_type: string }>;
   subtotal: number;
-  tax_rate: number;
+  tax_rate?: number;
   tax_amount: number;
   discount_amount: number;
+  extra_discount_type?: string;
+  extra_discount_value?: number;
+  postage_charge?: number;
+  other_charges?: number;
+  other_charges_label?: Opt<string>;
+  round_off?: number;
   total: number;
-  currency: string;
-  notes?: string;
-  terms?: string;
-  supply_type?: string;
-  place_of_supply?: string;
+  amount_paid?: number;
+  balance_due?: number;
+  currency: Opt<string>;
+  notes?: Opt<string>;
+  terms?: Opt<string>;
+  supply_type?: Opt<string>;
+  place_of_supply?: Opt<string>;
   items: InvoiceItem[];
+  shipping_name?: Opt<string>;
+  shipping_address?: Opt<string>;
+  dispatch_mode?: string;
+  delivery_status?: string;
+  courier_name?: Opt<string>;
+  tracking_number?: Opt<string>;
+  dispatch_date?: Opt<string>;
+  expected_delivery_date?: Opt<string>;
+  transport_name?: Opt<string>;
+  lr_number?: Opt<string>;
+  vehicle_number?: Opt<string>;
+  cartons?: Opt<number>;
+  freight_type?: Opt<string>;
+  delivery_type?: Opt<string>;
+  transport_details?: Opt<string>;
   business_name?: string;
   business_email?: string;
   business_address?: string;
@@ -155,17 +194,87 @@ interface InvoiceData {
   bank_account_number?: string;
   bank_ifsc?: string;
   bank_branch?: string;
-  client_name?: string;
-  client_email?: string;
-  client_company?: string;
-  client_address?: string;
-  client_gstin?: string;
-  client_state?: string;
-  client_state_code?: string;
+  client_name?: Opt<string>;
+  client_email?: Opt<string>;
+  client_company?: Opt<string>;
+  client_address?: Opt<string>;
+  client_gstin?: Opt<string>;
+  client_state?: Opt<string>;
+  client_state_code?: Opt<string>;
+  client_phone?: Opt<string>;
   logo_url?: string;
   signature_url?: string;
   signatory_name?: string;
   show_book_metadata?: boolean;
+}
+
+const NUMBER_LABEL: Record<string, string> = {
+  sales_invoice: 'Bill No.',
+  estimate: 'Estimate No.',
+  delivery_challan: 'Challan No.',
+  sales_return: 'Return No.',
+  credit_note: 'Credit Note No.',
+  purchase_bill: 'Bill No.',
+  purchase_return: 'Return No.',
+  debit_note: 'Debit Note No.',
+  binding_order: 'Order No.',
+};
+
+const docType = (d: InvoiceData) => d.doc_type || 'sales_invoice';
+const isSalesInvoice = (d: InvoiceData) => docType(d) === 'sales_invoice';
+
+function partyLabel(d: InvoiceData) {
+  if (docType(d) === 'binding_order') return 'Binder';
+  return d.side === 'purchase' ? 'Supplier' : 'Bill To';
+}
+
+/** Short wording printed above the bank details: disclaimers and reasons. */
+function docRemarks(d: InvoiceData): string | null {
+  switch (docType(d)) {
+    case 'estimate':
+      return `This is an estimate (approximate bill), not a tax invoice. Prices are approximate and may change${d.valid_until ? `; valid until ${formatGstDate(d.valid_until)}` : ''}.`;
+    case 'delivery_challan':
+      return 'Goods sent under delivery challan. This is not a tax invoice.';
+    case 'binding_order':
+      return 'Please bind and deliver the above titles. Rates are per copy.';
+    case 'sales_return':
+    case 'purchase_return':
+    case 'credit_note':
+    case 'debit_note':
+      return d.reason ? `Reason: ${d.reason}` : null;
+    default:
+      return null;
+  }
+}
+
+function dispatchLines(d: InvoiceData): string[] {
+  const parts = (...xs: (string | false | null | undefined)[]) => xs.filter(Boolean).join('  ·  ');
+  if (d.dispatch_mode === 'courier') {
+    return [parts(
+      `Courier: ${d.courier_name || '—'}`,
+      d.tracking_number && `Tracking / AWB: ${d.tracking_number}`,
+      d.dispatch_date && `Dispatched: ${formatGstDate(d.dispatch_date)}`,
+      d.expected_delivery_date && `Expected: ${formatGstDate(d.expected_delivery_date)}`
+    )];
+  }
+  if (d.dispatch_mode === 'transport') {
+    return [
+      parts(
+        `Transport: ${d.transport_name || '—'}`,
+        d.lr_number && `LR / GR No.: ${d.lr_number}`,
+        d.vehicle_number && `Vehicle: ${d.vehicle_number}`,
+        d.dispatch_date && `Dispatched: ${formatGstDate(d.dispatch_date)}`
+      ),
+      parts(
+        d.cartons != null && `Cartons: ${d.cartons}`,
+        d.freight_type && `Freight: ${d.freight_type === 'paid' ? 'Paid' : 'To Pay (unpaid)'}`,
+        d.delivery_type && (d.delivery_type === 'door' ? 'Door Delivery' : 'Godown Delivery'),
+        d.transport_details
+      ),
+    ].filter(Boolean);
+  }
+  if (d.dispatch_mode === 'hand') return ['Delivered by hand'];
+  return [];
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
@@ -348,56 +457,95 @@ const styles = StyleSheet.create({
 });
 
 // ─── Dynamic Splitting ────────────────────────────────────────────────────────
+// Page heights are estimated up front so every page keeps its header and
+// footer; estimates err on the generous side because overflow is clipped.
 
 const A4_USABLE = 841.89 - 40 - 2;
 
 const FULL_HEADER_HEIGHT = 165;
-const CLIENT_INFO_HEIGHT = 68;
 const TABLE_COL_HEADER_HEIGHT = 18;
 const COMPACT_HEADER_HEIGHT = 56;
 const BF_ROW_HEIGHT = 20;
 
-const SUBTOTAL_ROW_HEIGHT = 18;
+const ROW_HEIGHT = 18;
 const BANK_SIGNATORY_HEIGHT = 105;
 const PAGE_FOOTER_HEIGHT = 18;
-
-const IGST_ROW_HEIGHT = 18;
-const TOTAL_WITH_TAX_ROW_HEIGHT = 19;
-const IGST_OUTPUT_ROW_HEIGHT = 18;
 const AMOUNT_IN_WORDS_HEIGHT = 24;
 const GSTIN_LINE_HEIGHT = 21;
 const TERMS_HEIGHT = 105;
+const TEXT_LINE_HEIGHT = 11;
 
-const NON_LAST_FOOTER_HEIGHT = SUBTOTAL_ROW_HEIGHT + BANK_SIGNATORY_HEIGHT + PAGE_FOOTER_HEIGHT;
+const lineCount = (text: Opt<string>, perLine: number) =>
+  text ? text.split('\n').reduce((n, l) => n + Math.max(1, Math.ceil(l.length / perLine)), 0) : 0;
 
-const LAST_FOOTER_HEIGHT =
-  SUBTOTAL_ROW_HEIGHT +
-  IGST_ROW_HEIGHT +
-  TOTAL_WITH_TAX_ROW_HEIGHT +
-  IGST_OUTPUT_ROW_HEIGHT +
-  AMOUNT_IN_WORDS_HEIGHT +
-  BANK_SIGNATORY_HEIGHT +
-  GSTIN_LINE_HEIGHT +
-  TERMS_HEIGHT +
-  PAGE_FOOTER_HEIGHT;
-
-const PAGE1_ITEMS_AVAIL = A4_USABLE - FULL_HEADER_HEIGHT - CLIENT_INFO_HEIGHT - TABLE_COL_HEADER_HEIGHT - NON_LAST_FOOTER_HEIGHT;
-const MIDDLE_ITEMS_AVAIL = A4_USABLE - COMPACT_HEADER_HEIGHT - TABLE_COL_HEADER_HEIGHT - BF_ROW_HEIGHT - NON_LAST_FOOTER_HEIGHT;
-const LAST_ITEMS_AVAIL = A4_USABLE - COMPACT_HEADER_HEIGHT - TABLE_COL_HEADER_HEIGHT - BF_ROW_HEIGHT - LAST_FOOTER_HEIGHT;
-const SINGLE_PAGE_ITEMS_AVAIL = A4_USABLE - FULL_HEADER_HEIGHT - CLIENT_INFO_HEIGHT - TABLE_COL_HEADER_HEIGHT - LAST_FOOTER_HEIGHT;
-
-function estimateItemHeight(item: InvoiceItem | SerializedItem): number {
-  const desc = item.description || '';
-  if (desc.length > 70) return 38;
-  if (desc.length > 35) return 28;
-  return 20;
+function showShipTo(d: InvoiceData) {
+  return !!d.shipping_address && d.shipping_address.trim() !== (d.client_address ?? '').trim();
 }
 
-function takeItemsThatFit<T extends InvoiceItem>(items: T[], availHeight: number): T[] {
+function clientInfoHeight(d: InvoiceData) {
+  const left = 1 + (d.client_company ? 1 : 0) + (d.client_gstin ? 1 : 0) + lineCount(d.client_address, 55)
+    + (d.client_state ? 1 : 0) + (d.client_phone ? 1 : 0);
+  const right = showShipTo(d)
+    ? 1 + lineCount(d.shipping_address, 40) + (d.place_of_supply ? 1 : 0)
+    : (d.place_of_supply ? 1 : 0);
+  return 30 + Math.max(left, right) * TEXT_LINE_HEIGHT;
+}
+
+function gstRowCount(d: InvoiceData) {
+  if (d.tax_amount <= 0 && !isSalesInvoice(d)) return 0;
+  return (d.supply_type || 'IGST') === 'IGST' ? 1 : 2;
+}
+
+/** Number of label/value rows in the last page's totals block (excluding subtotal). */
+function totalRowCount(d: InvoiceData) {
+  let rows = gstRowCount(d) + 1; // + total
+  if (d.discount_amount > 0) rows += 2; // extra discount + taxable value
+  if ((d.postage_charge ?? 0) > 0) rows++;
+  if ((d.other_charges ?? 0) > 0) rows++;
+  if ((d.round_off ?? 0) !== 0) rows++;
+  if (isSalesInvoice(d)) rows++; // "IGST OUTPUT" marker row
+  if (d.is_bill && d.payment_mode === 'credit' && (d.amount_paid ?? 0) > 0) rows += 2;
+  return rows;
+}
+
+function lastFooterHeight(d: InvoiceData) {
+  const remarks = docRemarks(d);
+  const dispatch = dispatchLines(d);
+  return ROW_HEIGHT // subtotal
+    + totalRowCount(d) * ROW_HEIGHT
+    + AMOUNT_IN_WORDS_HEIGHT
+    + (remarks ? 8 + lineCount(remarks, 110) * TEXT_LINE_HEIGHT : 0)
+    + (dispatch.length ? 14 + dispatch.length * TEXT_LINE_HEIGHT : 0)
+    + BANK_SIGNATORY_HEIGHT
+    + (d.gstin ? GSTIN_LINE_HEIGHT : 0)
+    + (isSalesInvoice(d) ? TERMS_HEIGHT : 0)
+    + PAGE_FOOTER_HEIGHT;
+}
+
+const NON_LAST_FOOTER_HEIGHT = ROW_HEIGHT + BANK_SIGNATORY_HEIGHT + PAGE_FOOTER_HEIGHT;
+
+function itemMetaLines(item: InvoiceItem, showBookMetadata?: boolean): string[] {
+  const meta: string[] = [];
+  if (showBookMetadata) {
+    if (item.isbn) meta.push(`ISBN: ${item.isbn}`);
+    if (item.author) meta.push(`Author: ${item.author}`);
+  }
+  if (item.binding) meta.push(`Binding: ${item.binding}`);
+  if (item.damaged_qty && item.damaged_qty > 0) meta.push(`Damaged: ${item.damaged_qty}`);
+  return meta;
+}
+
+function estimateItemHeight(item: InvoiceItem, showBookMetadata?: boolean): number {
+  const desc = item.description || '';
+  const base = desc.length > 70 ? 38 : desc.length > 35 ? 28 : 20;
+  return base + itemMetaLines(item, showBookMetadata).length * 9;
+}
+
+function takeItemsThatFit<T extends InvoiceItem>(items: T[], availHeight: number, meta?: boolean): T[] {
   let usedHeight = 0;
   let count = 0;
   for (const item of items) {
-    const h = estimateItemHeight(item);
+    const h = estimateItemHeight(item, meta);
     if (usedHeight + h > availHeight && count > 0) break;
     usedHeight += h;
     count++;
@@ -405,48 +553,40 @@ function takeItemsThatFit<T extends InvoiceItem>(items: T[], availHeight: number
   return items.slice(0, count);
 }
 
-function willFitOnLastPage<T extends InvoiceItem>(items: T[], lastAvailHeight: number): boolean {
-  const totalHeight = items.reduce((sum, item) => sum + estimateItemHeight(item), 0);
-  return totalHeight <= lastAvailHeight;
+function fits<T extends InvoiceItem>(items: T[], availHeight: number, meta?: boolean): boolean {
+  return items.reduce((sum, item) => sum + estimateItemHeight(item, meta), 0) <= availHeight;
 }
 
-function splitItemsDynamically(items: SerializedItem[]): SerializedItem[][] {
+function splitItemsDynamically(items: SerializedItem[], d: InvoiceData): SerializedItem[][] {
   if (items.length === 0) return [[]];
+  const meta = d.show_book_metadata;
+  const client = clientInfoHeight(d);
+  const last = lastFooterHeight(d);
+  const singlePage = A4_USABLE - FULL_HEADER_HEIGHT - client - TABLE_COL_HEADER_HEIGHT - last;
+  const firstPage = A4_USABLE - FULL_HEADER_HEIGHT - client - TABLE_COL_HEADER_HEIGHT - NON_LAST_FOOTER_HEIGHT;
+  const middlePage = A4_USABLE - COMPACT_HEADER_HEIGHT - TABLE_COL_HEADER_HEIGHT - BF_ROW_HEIGHT - NON_LAST_FOOTER_HEIGHT;
+  const lastPage = A4_USABLE - COMPACT_HEADER_HEIGHT - TABLE_COL_HEADER_HEIGHT - BF_ROW_HEIGHT - last;
 
-  if (willFitOnLastPage(items, SINGLE_PAGE_ITEMS_AVAIL)) {
-    return [items];
-  }
+  if (fits(items, singlePage, meta)) return [items];
 
   const chunks: SerializedItem[][] = [];
   let remaining = [...items];
+  const page1 = takeItemsThatFit(remaining, firstPage, meta);
+  chunks.push(page1);
+  remaining = remaining.slice(page1.length);
 
-  // Page 1
-  const page1Items = takeItemsThatFit(remaining, PAGE1_ITEMS_AVAIL);
-  chunks.push(page1Items);
-  remaining = remaining.slice(page1Items.length);
-
-  if (remaining.length === 0) {
-    return [items];
-  }
-
-  // Middle + last pages
   while (remaining.length > 0) {
-    if (willFitOnLastPage(remaining, LAST_ITEMS_AVAIL)) {
+    if (fits(remaining, lastPage, meta)) {
       chunks.push(remaining);
       break;
     }
-
-    const pageItems = takeItemsThatFit(remaining, MIDDLE_ITEMS_AVAIL);
-
-    if (pageItems.length === 0) {
-      chunks.push([remaining[0]]);
-      remaining = remaining.slice(1);
-    } else {
-      chunks.push(pageItems);
-      remaining = remaining.slice(pageItems.length);
-    }
+    const pageItems = takeItemsThatFit(remaining, middlePage, meta);
+    chunks.push(pageItems.length ? pageItems : [remaining[0]]);
+    remaining = remaining.slice(Math.max(pageItems.length, 1));
   }
-
+  // The totals block always needs a page of its own space; if the last chunk was
+  // taken as a middle page, add an empty closing page.
+  if (!fits(chunks[chunks.length - 1], chunks.length === 1 ? singlePage : lastPage, meta)) chunks.push([]);
   return chunks;
 }
 
@@ -477,18 +617,14 @@ function BFRow({ amount }: { amount: number }) {
   );
 }
 
-function ItemRow({ item, showBookMetadata }: { item: any; showBookMetadata?: boolean }) {
+function ItemRow({ item, showBookMetadata }: { item: SerializedItem; showBookMetadata?: boolean }) {
   const disc = item.discount_percent ?? 0;
-  const meta: string[] = [];
-  if (showBookMetadata) {
-    if (item.isbn) meta.push(`ISBN: ${item.isbn}`);
-    if (item.author) meta.push(`Author: ${item.author}`);
-  }
+  const meta = itemMetaLines(item, showBookMetadata);
   const descNode = meta.length > 0
     ? React.createElement(View, { style: styles.colDesc },
         React.createElement(Text, { style: styles.td }, item.description),
         ...meta.map((line, i) =>
-          React.createElement(Text, { key: i, style: { fontSize: 7, color: GRAY, marginTop: 1 } }, line)
+          React.createElement(Text, { key: i, style: { fontSize: 7, color: line.startsWith('Damaged') ? '#B91C1C' : GRAY, marginTop: 1 } }, line)
         )
       )
     : React.createElement(Text, { style: [styles.td, styles.colDesc] }, item.description);
@@ -500,12 +636,35 @@ function ItemRow({ item, showBookMetadata }: { item: any; showBookMetadata?: boo
     React.createElement(Text, { style: [styles.td, styles.colGST] }, item.gst_rate == null ? '' : `${item.gst_rate}%`),
     React.createElement(Text, { style: [styles.td, styles.colQty] }, `${item.quantity}`),
     React.createElement(Text, { style: [styles.td, styles.colRate] }, formatIndianCurrency(item.unit_price)),
-    React.createElement(Text, { style: [styles.td, styles.colDisc] }, disc > 0 ? `${disc}%` : '\u2013'),
+    React.createElement(Text, { style: [styles.td, styles.colDisc] }, disc > 0 ? `${disc}%` : '–'),
     React.createElement(Text, { style: [styles.td, styles.colAmt] }, formatIndianCurrency(item.amount))
   );
 }
 
+function MetaLine({ label, value }: { label: string; value: string }) {
+  return React.createElement(Text, { style: styles.invoiceMeta },
+    React.createElement(Text, { style: styles.invoiceMetaLabel }, `${label}: `),
+    value
+  );
+}
+
 function FullHeader({ data, biz }: { data: InvoiceData; biz: string }) {
+  const type = docType(data);
+  const numberLabel = NUMBER_LABEL[type] ?? 'No.';
+  const shownNumber = type === 'sales_invoice' ? data.bill_number || data.invoice_number : data.invoice_number;
+  const meta: [string, string][] = [[numberLabel, shownNumber], ['Date', formatGstDate(data.issue_date)]];
+  if (data.is_bill) {
+    meta.push(['Payment', data.payment_mode === 'cash' ? 'Cash' : `Credit${data.credit_days ? ` (${data.credit_days} days)` : ''}`]);
+    if (data.payment_mode === 'credit' && data.due_date) meta.push(['Due Date', formatGstDate(data.due_date)]);
+  }
+  if (type === 'estimate' && data.valid_until) meta.push(['Valid Until', formatGstDate(data.valid_until)]);
+  if (data.source_doc) meta.push([type === 'sales_invoice' || type === 'purchase_bill' ? 'Ref' : 'Against', data.source_doc.invoice_number]);
+  if (data.party_ref_number) {
+    meta.push([data.side === 'purchase' ? 'Supplier Bill No.' : 'Party Ref', data.party_ref_number]);
+  }
+  if (data.order_id) meta.push(['Order ID', data.order_id]);
+  if (data.order_date) meta.push(['Order Date', formatGstDate(data.order_date)]);
+
   return React.createElement(React.Fragment, null,
     React.createElement(View, { style: styles.topBorder }),
     React.createElement(View, { style: styles.headerRow },
@@ -531,37 +690,20 @@ function FullHeader({ data, biz }: { data: InvoiceData; biz: string }) {
           : null
       ),
       React.createElement(View, { style: styles.headerRight },
-        React.createElement(Text, { style: styles.invoiceTitle }, 'Invoice'),
-        React.createElement(Text, { style: styles.invoiceMeta },
-          React.createElement(Text, { style: styles.invoiceMetaLabel }, 'Bill No.: '),
-          data.bill_number || data.invoice_number
-        ),
-        React.createElement(Text, { style: styles.invoiceMeta },
-          React.createElement(Text, { style: styles.invoiceMetaLabel }, 'Date: '),
-          formatGstDate(data.issue_date)
-        ),
-        data.order_id
-          ? React.createElement(Text, { style: styles.invoiceMeta },
-              React.createElement(Text, { style: styles.invoiceMetaLabel }, 'Order ID: '),
-              data.order_id
-            )
-          : null,
-        data.order_date
-          ? React.createElement(Text, { style: styles.invoiceMeta },
-              React.createElement(Text, { style: styles.invoiceMetaLabel }, 'Order Date: '),
-              formatGstDate(data.order_date)
-            )
-          : null
+        React.createElement(Text, { style: [styles.invoiceTitle, (data.doc_title ?? '').length > 14 ? { fontSize: 16 } : {}] }, data.doc_title || 'Invoice'),
+        ...meta.map(([label, value]) => React.createElement(MetaLine, { key: label, label, value }))
       )
     )
   );
 }
 
 function ClientInfoSection({ data }: { data: InvoiceData }) {
+  const name = data.client_name || (data.payment_mode === 'cash' ? 'Cash' : 'N/A');
+  const shipTo = showShipTo(data);
   return React.createElement(View, { style: styles.billSection },
     React.createElement(View, { style: styles.billLeft },
-      React.createElement(Text, { style: [styles.billToLabel, { marginBottom: 6 }] }, 'To,'),
-      React.createElement(Text, { style: styles.billName }, data.client_name || 'N/A'),
+      React.createElement(Text, { style: [styles.billToLabel, { marginBottom: 6 }] }, partyLabel(data)),
+      React.createElement(Text, { style: styles.billName }, name),
       data.client_company
         ? React.createElement(Text, { style: styles.billDetail }, data.client_company)
         : null,
@@ -575,20 +717,31 @@ function ClientInfoSection({ data }: { data: InvoiceData }) {
         ? React.createElement(Text, { style: styles.billDetail },
             `State: ${data.client_state}${data.client_state_code ? ` (${data.client_state_code})` : ''}`
           )
+        : null,
+      data.client_phone
+        ? React.createElement(Text, { style: styles.billDetail }, `Phone: ${data.client_phone}`)
         : null
     ),
-    data.place_of_supply
-      ? React.createElement(View, { style: styles.billRight },
-          React.createElement(Text, { style: styles.billDetail },
+    React.createElement(View, { style: [styles.billRight, shipTo ? { alignItems: 'flex-start' } : {}] },
+      shipTo
+        ? React.createElement(View, null,
+            React.createElement(Text, { style: [styles.billToLabel, { marginBottom: 6 }] }, 'Ship To'),
+            React.createElement(Text, { style: styles.billName }, data.shipping_name || name),
+            React.createElement(Text, { style: styles.billDetail }, data.shipping_address)
+          )
+        : null,
+      data.place_of_supply
+        ? React.createElement(Text, { style: [styles.billDetail, shipTo ? { marginTop: 4 } : {}] },
             React.createElement(Text, { style: { fontFamily: 'Helvetica-Bold' } }, 'Place of Supply: '),
             data.place_of_supply
           )
-        )
-      : null
+        : null
+    )
   );
 }
 
 function CompactHeader({ data, biz }: { data: InvoiceData; biz: string }) {
+  const type = docType(data);
   return React.createElement(React.Fragment, null,
     React.createElement(View, { style: styles.topBorder }),
     React.createElement(View, { style: styles.compactHeaderRow },
@@ -604,10 +757,10 @@ function CompactHeader({ data, biz }: { data: InvoiceData; biz: string }) {
         )
       ),
       React.createElement(View, { style: styles.compactHeaderRight },
-        React.createElement(Text, { style: styles.compactInvoiceTitle }, 'Invoice'),
+        React.createElement(Text, { style: styles.compactInvoiceTitle }, data.doc_title || 'Invoice'),
         React.createElement(Text, { style: styles.compactInvoiceMeta },
-          React.createElement(Text, { style: { fontFamily: 'Helvetica-Bold' } }, 'Bill No.: '),
-          data.bill_number || data.invoice_number
+          React.createElement(Text, { style: { fontFamily: 'Helvetica-Bold' } }, `${NUMBER_LABEL[type] ?? 'No.'}: `),
+          type === 'sales_invoice' ? data.bill_number || data.invoice_number : data.invoice_number
         ),
         React.createElement(Text, { style: styles.compactInvoiceMeta },
           React.createElement(Text, { style: { fontFamily: 'Helvetica-Bold' } }, 'Date: '),
@@ -618,72 +771,58 @@ function CompactHeader({ data, biz }: { data: InvoiceData; biz: string }) {
   );
 }
 
-function SubtotalRow({ amount }: { amount: number }) {
-  return React.createElement(View, { style: styles.subtotalRow },
-    React.createElement(Text, { style: styles.totalLabel }, 'Subtotal:'),
-    React.createElement(Text, { style: styles.totalValue }, formatIndianCurrency(amount))
-  );
-}
-
-// Per-item GST sum — mirrors apps/web/lib/utils.ts:calculateGstTotals
-// so the downloaded PDF matches the live preview. Uses `?? 18` (not
-// `|| 18`) so a real 0% rate stays 0% instead of falling back to 18%.
-function computeGstAmount(items: InvoiceItem[]): number {
-  return items.reduce((sum, item) => {
-    const qty = Number(item.quantity) || 0;
-    const price = Number(item.unit_price) || 0;
-    const disc = Number(item.discount_percent) || 0;
-    const rate = item.gst_rate == null ? 18 : Number(item.gst_rate);
-    const lineAmt = qty * price * (1 - disc / 100);
-    return sum + lineAmt * (rate / 100);
-  }, 0);
-}
-
-function displayGstRate(items: InvoiceItem[]): number {
-  if (items.length === 0) return 0;
-  return items[0].gst_rate == null ? 18 : Number(items[0].gst_rate);
-}
-
-function IGSTRow({ data }: { data: InvoiceData; subtotal: number }) {
-  const supplyType = data.supply_type || 'IGST';
-  const rate = displayGstRate(data.items);
-  const totalGstAmount = computeGstAmount(data.items);
-  const halfRate = rate / 2;
-
-  if (supplyType === 'IGST') {
-    return React.createElement(View, { style: styles.totalRow },
-      React.createElement(Text, { style: styles.totalLabel }, `IGST (${rate}%):`),
-      React.createElement(Text, { style: styles.totalValue }, formatIndianCurrency(totalGstAmount))
-    );
-  }
-  return React.createElement(React.Fragment, null,
-    React.createElement(View, { style: styles.totalRow },
-      React.createElement(Text, { style: styles.totalLabel }, `CGST (${halfRate}%):`),
-      React.createElement(Text, { style: styles.totalValue }, formatIndianCurrency(totalGstAmount / 2))
-    ),
-    React.createElement(View, { style: styles.totalRow },
-      React.createElement(Text, { style: styles.totalLabel }, `SGST (${halfRate}%):`),
-      React.createElement(Text, { style: styles.totalValue }, formatIndianCurrency(totalGstAmount / 2))
-    )
-  );
-}
-
-function TotalWithTaxRow({ subtotal, data }: { subtotal: number; data: InvoiceData }) {
-  const total = subtotal + computeGstAmount(data.items);
+function TotalRow({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
   return React.createElement(View, { style: styles.totalRow },
-    React.createElement(Text, { style: styles.totalLabelBold }, 'Total Amount (with Tax):'),
-    React.createElement(Text, { style: styles.totalValueBold }, formatIndianCurrency(total))
+    React.createElement(Text, { style: bold ? styles.totalLabelBold : styles.totalLabel }, label),
+    React.createElement(Text, { style: bold ? styles.totalValueBold : styles.totalValue }, value)
   );
 }
 
-function IGSTOutputRow() {
-  return React.createElement(View, { style: styles.igstOutputRow },
-    React.createElement(Text, { style: styles.igstOutputLabel }, 'IGST OUTPUT')
-  );
+function displayGstRate(items: InvoiceItem[]): string {
+  const rates = [...new Set(items.map((i) => (i.gst_rate == null ? 18 : Number(i.gst_rate))))];
+  return rates.length === 1 ? `${rates[0]}%` : 'mixed';
 }
 
-function AmountInWordsRow({ subtotal, data }: { subtotal: number; data: InvoiceData }) {
-  const total = subtotal + computeGstAmount(data.items);
+/** Totals for the last page, built from the stored (server-computed) amounts. */
+function TotalsBlock({ data }: { data: InvoiceData }) {
+  const rows: React.ReactElement[] = [];
+  const add = (label: string, value: string, bold = false) =>
+    rows.push(React.createElement(TotalRow, { key: label, label, value, bold }));
+
+  if (data.discount_amount > 0) {
+    add(
+      data.extra_discount_type === 'percent' ? `Extra Discount (${data.extra_discount_value}%):` : 'Extra Discount:',
+      `- ${formatIndianCurrency(data.discount_amount)}`
+    );
+    add('Taxable Value:', formatIndianCurrency(data.subtotal - data.discount_amount));
+  }
+  if (gstRowCount(data) > 0) {
+    const rate = displayGstRate(data.items);
+    if ((data.supply_type || 'IGST') === 'IGST') {
+      add(`IGST (${rate}):`, formatIndianCurrency(data.tax_amount));
+    } else {
+      const half = rate === 'mixed' ? 'mixed' : `${parseFloat(rate) / 2}%`;
+      add(`CGST (${half}):`, formatIndianCurrency(data.tax_amount / 2));
+      add(`SGST (${half}):`, formatIndianCurrency(data.tax_amount / 2));
+    }
+  }
+  if ((data.postage_charge ?? 0) > 0) add('Postage / Delivery Charges:', formatIndianCurrency(data.postage_charge!));
+  if ((data.other_charges ?? 0) > 0) add(`${data.other_charges_label || 'Other Charges'}:`, formatIndianCurrency(data.other_charges!));
+  if ((data.round_off ?? 0) !== 0) add('Round Off:', `${data.round_off! > 0 ? '+' : '-'} ${formatIndianCurrency(Math.abs(data.round_off!))}`);
+  add(data.tax_amount > 0 ? 'Total Amount (with Tax):' : 'Total Amount:', formatIndianCurrency(data.total), true);
+  if (isSalesInvoice(data)) {
+    rows.push(React.createElement(View, { key: 'igst-output', style: styles.igstOutputRow },
+      React.createElement(Text, { style: styles.igstOutputLabel }, (data.supply_type || 'IGST') === 'IGST' ? 'IGST OUTPUT' : 'CGST + SGST OUTPUT')
+    ));
+  }
+  if (data.is_bill && data.payment_mode === 'credit' && (data.amount_paid ?? 0) > 0) {
+    add('Amount Paid:', formatIndianCurrency(data.amount_paid!));
+    add('Balance Due:', formatIndianCurrency(data.balance_due ?? 0), true);
+  }
+  return React.createElement(React.Fragment, null, ...rows);
+}
+
+function AmountInWordsRow({ total }: { total: number }) {
   return React.createElement(View, { style: styles.wordsRow },
     React.createElement(Text, { style: styles.wordsText },
       React.createElement(Text, { style: { fontFamily: 'Helvetica-Bold' } }, 'Total Amount in Words: '),
@@ -692,8 +831,26 @@ function AmountInWordsRow({ subtotal, data }: { subtotal: number; data: InvoiceD
   );
 }
 
+function RemarksAndDispatch({ data }: { data: InvoiceData }) {
+  const remarks = docRemarks(data);
+  const dispatch = dispatchLines(data);
+  if (!remarks && dispatch.length === 0) return null;
+  return React.createElement(View, { style: { paddingHorizontal: 8, paddingTop: 4 } },
+    remarks
+      ? React.createElement(Text, { style: { fontSize: 7.5, color: '#475569', fontFamily: 'Helvetica-Oblique', marginBottom: 4 } }, remarks)
+      : null,
+    dispatch.length
+      ? React.createElement(View, { style: { borderWidth: 0.5, borderColor: BORDER, backgroundColor: '#F8FAFC', padding: 5 } },
+          React.createElement(Text, { style: { fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: NAVY, marginBottom: 2 } }, 'Dispatch Details'),
+          ...dispatch.map((line, i) => React.createElement(Text, { key: i, style: { fontSize: 7.5, color: '#374151' } }, line))
+        )
+      : null
+  );
+}
+
 function BankAndSignatorySection({ data }: { data: InvoiceData }) {
-  const hasBankDetails = data.bank_name || data.bank_account_number || data.bank_ifsc;
+  // Our bank details only make sense on documents we send to customers.
+  const hasBankDetails = data.side !== 'purchase' && (data.bank_name || data.bank_account_number || data.bank_ifsc);
   return React.createElement(View, { style: styles.bottomSection },
     React.createElement(View, { style: styles.bottomLeft },
       data.notes
@@ -771,10 +928,9 @@ function createGstInvoiceDocument(data: InvoiceData) {
     amount: Number(item.amount) || 0,
   }));
 
-  const chunks = splitItemsDynamically(itemsWithSerial);
+  const chunks = splitItemsDynamically(itemsWithSerial, data);
   const bizName = data.business_name || 'QuickInvoice';
   const totalPages = chunks.length;
-  const isSinglePage = totalPages === 1;
 
   let runningTotal = 0;
   const pageSubtotals: number[] = chunks.map(chunk => {
@@ -787,7 +943,7 @@ function createGstInvoiceDocument(data: InvoiceData) {
     const isLastPage = pageIndex === chunks.length - 1;
     const pageNumber = pageIndex + 1;
     const bfAmount = pageIndex > 0 ? pageSubtotals[pageIndex - 1] : 0;
-    const cumulativeSubtotal = pageSubtotals[pageIndex];
+    const cumulativeSubtotal = isLastPage ? data.subtotal : pageSubtotals[pageIndex];
 
     return React.createElement(Page, { key: pageIndex, size: 'A4', style: styles.page, wrap: false },
       React.createElement(View, { style: styles.outerBorder },
@@ -815,26 +971,13 @@ function createGstInvoiceDocument(data: InvoiceData) {
 
         // ── FOOTER SECTION — pinned to bottom ──
         React.createElement(View, { style: styles.footerSection },
-          React.createElement(SubtotalRow, { amount: cumulativeSubtotal }),
-          (isLastPage || isSinglePage)
-            ? React.createElement(IGSTRow, { data, subtotal: cumulativeSubtotal })
-            : null,
-          (isLastPage || isSinglePage)
-            ? React.createElement(TotalWithTaxRow, { subtotal: cumulativeSubtotal, data })
-            : null,
-          (isLastPage || isSinglePage)
-            ? React.createElement(IGSTOutputRow, null)
-            : null,
-          (isLastPage || isSinglePage)
-            ? React.createElement(AmountInWordsRow, { subtotal: cumulativeSubtotal, data })
-            : null,
+          React.createElement(TotalRow, { label: 'Subtotal:', value: formatIndianCurrency(cumulativeSubtotal) }),
+          isLastPage ? React.createElement(TotalsBlock, { data }) : null,
+          isLastPage ? React.createElement(AmountInWordsRow, { total: data.total }) : null,
+          isLastPage ? React.createElement(RemarksAndDispatch, { data }) : null,
           React.createElement(BankAndSignatorySection, { data }),
-          (isLastPage || isSinglePage)
-            ? React.createElement(GSTINLine, { gstin: data.gstin })
-            : null,
-          (isLastPage || isSinglePage)
-            ? React.createElement(TermsAndConditions, null)
-            : null,
+          isLastPage ? React.createElement(GSTINLine, { gstin: data.gstin }) : null,
+          isLastPage && isSalesInvoice(data) ? React.createElement(TermsAndConditions, null) : null,
           React.createElement(PageFooter, { current: pageNumber, total: totalPages, biz: bizName })
         )
       )
@@ -848,18 +991,19 @@ function createGstInvoiceDocument(data: InvoiceData) {
 
 export class PdfService {
   async generatePdf(invoiceData: InvoiceData): Promise<Buffer> {
-    const data = { ...invoiceData };
-    if (data.items) {
-      data.items = data.items.map((item: any) => ({
+    const data: InvoiceData = {
+      ...invoiceData,
+      subtotal: Number(invoiceData.subtotal) || 0,
+      tax_amount: Number(invoiceData.tax_amount) || 0,
+      discount_amount: Number(invoiceData.discount_amount) || 0,
+      total: Number(invoiceData.total) || 0,
+      items: (invoiceData.items || []).map((item) => ({
         ...item,
-        description: item.description,
         quantity: Number(item.quantity),
         unit_price: Number(item.unit_price),
         amount: Number(item.amount),
-      }));
-    } else {
-      data.items = [];
-    }
+      })),
+    };
 
     if (data.logo_url) {
       data.logo_url = await getImageAsBase64(data.logo_url) || undefined;
@@ -872,10 +1016,10 @@ export class PdfService {
     return Buffer.from(buffer);
   }
 
-  async generateAndUpload(userId: string, invoiceId: string, invoiceData: InvoiceData): Promise<string> {
+  async generateAndUpload(orgId: string, docId: string, invoiceData: InvoiceData): Promise<string> {
     const pdfBuffer = await this.generatePdf(invoiceData);
-    const url = await storageService.uploadPdf(userId, invoiceId, pdfBuffer);
-    await prisma.invoice.update({ where: { id: invoiceId }, data: { pdfUrl: url } });
+    const url = await storageService.uploadPdf(orgId, docId, pdfBuffer);
+    await prisma.invoice.update({ where: { id: docId }, data: { pdfUrl: url } });
     return url;
   }
 }

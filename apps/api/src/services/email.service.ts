@@ -20,6 +20,7 @@ export async function sendInvoiceEmail({
   dueDate,
   pdfBuffer,
   pdfFilename,
+  documentLabel = 'Invoice',
 }: {
   to: string;
   clientName: string;
@@ -30,7 +31,11 @@ export async function sendInvoiceEmail({
   dueDate?: string;
   pdfBuffer: Buffer;
   pdfFilename: string;
+  /** e.g. "Estimate", "Delivery Challan" — defaults to "Invoice". */
+  documentLabel?: string;
 }) {
+  const isInvoice = documentLabel === 'Invoice';
+  const docWord = documentLabel.toLowerCase();
   const formattedTotal = new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: currency || 'INR',
@@ -42,7 +47,7 @@ export async function sendInvoiceEmail({
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Invoice ${invoiceNumber}</title>
+      <title>${documentLabel} ${invoiceNumber}</title>
     </head>
     <body style="margin:0;padding:0;background:#F8F7FF;font-family:Inter,Arial,sans-serif;">
       <table width="100%" cellpadding="0" cellspacing="0"
@@ -58,11 +63,11 @@ export async function sendInvoiceEmail({
               <td style="background:#6C63FF;padding:32px 40px;">
                 <h1 style="margin:0;color:#ffffff;font-size:24px;
                            font-weight:600;">
-                  Invoice from ${businessName}
+                  ${documentLabel} from ${businessName}
                 </h1>
                 <p style="margin:8px 0 0;color:rgba(255,255,255,0.85);
                            font-size:14px;">
-                  Invoice #${invoiceNumber}
+                  ${documentLabel} #${invoiceNumber}
                 </p>
               </td>
             </tr>
@@ -75,8 +80,8 @@ export async function sendInvoiceEmail({
                 </p>
                 <p style="margin:0 0 24px;color:#6B6880;font-size:14px;
                            line-height:1.6;">
-                  Please find your invoice attached to this email.
-                  Here is a summary of the amount due:
+                  Please find your ${docWord} attached to this email.
+                  Here is a summary${isInvoice ? ' of the amount due' : ''}:
                 </p>
 
                 <!-- Invoice Summary Box -->
@@ -89,7 +94,7 @@ export async function sendInvoiceEmail({
                         <tr>
                           <td style="color:#6B6880;font-size:13px;
                                      padding-bottom:8px;">
-                            Invoice Number
+                            ${documentLabel} Number
                           </td>
                           <td align="right"
                               style="color:#1A1825;font-size:13px;
@@ -114,7 +119,7 @@ export async function sendInvoiceEmail({
                           <td style="color:#6B6880;font-size:14px;
                                      font-weight:600;padding-top:8px;
                                      border-top:1px solid #E4E2F0;">
-                            Total Amount Due
+                            ${isInvoice ? 'Total Amount Due' : 'Total Amount'}
                           </td>
                           <td align="right"
                               style="color:#6C63FF;font-size:18px;
@@ -130,8 +135,7 @@ export async function sendInvoiceEmail({
 
                 <p style="margin:0 0 32px;color:#6B6880;font-size:13px;
                            line-height:1.6;">
-                  The invoice PDF is attached to this email.
-                  Please review and process payment at your earliest convenience.
+                  The ${docWord} PDF is attached to this email.${isInvoice ? ' Please review and process payment at your earliest convenience.' : ''}
                 </p>
 
                 <p style="margin:0;color:#6B6880;font-size:13px;">
@@ -147,7 +151,7 @@ export async function sendInvoiceEmail({
                          background:#F8F7FF;">
                 <p style="margin:0;color:#9B98AE;font-size:12px;
                            text-align:center;">
-                  This invoice was sent by ${businessName} using QuickInvoice.
+                  This ${docWord} was sent by ${businessName} using QuickInvoice.
                 </p>
               </td>
             </tr>
@@ -162,7 +166,7 @@ export async function sendInvoiceEmail({
   const info = await transporter.sendMail({
     from: `"${businessName}" <${process.env.SMTP_FROM}>`,
     to,
-    subject: `Invoice #${invoiceNumber} from ${businessName}`,
+    subject: `${documentLabel} #${invoiceNumber} from ${businessName}`,
     html,
     attachments: [
       {

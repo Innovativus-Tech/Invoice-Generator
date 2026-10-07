@@ -3,7 +3,7 @@ import { prisma } from '../lib/prisma.js';
 export class SalesService {
   async getSummary(orgId: string, month: number, year: number) {
     const allPaid = await prisma.invoice.findMany({
-      where: { orgId, status: 'paid' },
+      where: { orgId, docType: 'sales_invoice', status: 'paid' },
       include: { client: { select: { id: true, name: true, email: true, company: true } } },
     });
 

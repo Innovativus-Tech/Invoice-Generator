@@ -8,6 +8,7 @@ export const CacheKeys = {
   inventory: (orgId: string) => `inventory:${orgId}`,
   invoices: (orgId: string) => `invoices:${orgId}`,
   dashboardStats: (orgId: string) => `dashboard:stats:${orgId}`,
+  dashboardOverview: (orgId: string) => `dashboard:overview:${orgId}`,
   revenueChart: (orgId: string, period: string) => `dashboard:revenue:${orgId}:${period}`,
   settings: (orgId: string) => `settings:${orgId}`,
   nextInvoiceNumber: (orgId: string) => `invoice:next:${orgId}`,
