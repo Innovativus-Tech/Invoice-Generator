@@ -31,6 +31,9 @@ model Organization {
   purchaseOrders PurchaseOrder[]
   orgBooks       OrgBook[]
   orgClients     OrgClient[]
+  numberSeries   NumberSeries[]
+  payments       Payment[]
+  stockMovements StockMovement[]
 
   @@map("organizations")
 }
@@ -126,23 +129,33 @@ model Contact {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model Client {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  name      String   @db.Text
-  email     String?  @db.Text
-  company   String?  @db.Text
-  address   String?  @db.Text
-  phone     String?  @db.Text
-  notes     String?  @db.Text
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  gstin     String?  @db.Text
-  state     String?  @db.Text
-  stateCode String?  @map("state_code") @db.Text
-  orgId     String?  @map("org_id") @db.Uuid
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  name            String   @db.Text
+  email           String?  @db.Text
+  company         String?  @db.Text
+  address         String?  @db.Text
+  phone           String?  @db.Text
+  notes           String?  @db.Text
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  gstin           String?  @db.Text
+  state           String?  @db.Text
+  stateCode       String?  @map("state_code") @db.Text
+  orgId           String?  @map("org_id") @db.Uuid
+  // Party fields (migration 020)
+  partyType       String   @default("customer") @map("party_type") @db.Text
+  creditDays      Int      @default(0) @map("credit_days")
+  creditLimit     Decimal  @default(0) @map("credit_limit") @db.Decimal(12, 2)
+  openingBalance  Decimal  @default(0) @map("opening_balance") @db.Decimal(12, 2)
+  pincode         String?  @db.Text
+  shippingAddress String?  @map("shipping_address") @db.Text
+  shippingState   String?  @map("shipping_state") @db.Text
+  shippingPincode String?  @map("shipping_pincode") @db.Text
 
   organization   Organization?   @relation(fields: [orgId], references: [id])
   invoices       Invoice[]
   purchaseOrders PurchaseOrder[]
+  payments       Payment[]
 
   @@map("clients")
 }
@@ -180,11 +193,58 @@ model Invoice {
   orderDate      DateTime? @map("order_date") @db.Date
   orgId          String?   @map("org_id") @db.Uuid
 
-  organization  Organization?  @relation(fields: [orgId], references: [id])
-  client        Client?        @relation(fields: [clientId], references: [id])
-  contact       Contact?       @relation(fields: [contactId], references: [id])
-  invoiceItems  InvoiceItem[]
-  notifications Notification[]
+  // Voucher fields (migration 020) — every trading document lives in this table
+  docType              String    @default("sales_invoice") @map("doc_type") @db.Text
+  paymentMode          String    @default("credit") @map("payment_mode") @db.Text
+  partyName            String?   @map("party_name") @db.Text
+  partyPhone           String?   @map("party_phone") @db.Text
+  creditDays           Int       @default(0) @map("credit_days")
+  dueDate              DateTime? @map("due_date") @db.Date
+  billingAddress       String?   @map("billing_address") @db.Text
+  shippingName         String?   @map("shipping_name") @db.Text
+  shippingAddress      String?   @map("shipping_address") @db.Text
+  extraDiscountType    String    @default("percent") @map("extra_discount_type") @db.Text
+  extraDiscountValue   Decimal   @default(0) @map("extra_discount_value") @db.Decimal(12, 2)
+  postageCharge        Decimal   @default(0) @map("postage_charge") @db.Decimal(12, 2)
+  otherCharges         Decimal   @default(0) @map("other_charges") @db.Decimal(12, 2)
+  otherChargesLabel    String?   @map("other_charges_label") @db.Text
+  applyRoundOff        Boolean   @default(false) @map("apply_round_off")
+  roundOff             Decimal   @default(0) @map("round_off") @db.Decimal(12, 2)
+  amountPaid           Decimal   @default(0) @map("amount_paid") @db.Decimal(12, 2)
+  sourceDocId          String?   @map("source_doc_id") @db.Uuid
+  partyRefNumber       String?   @map("party_ref_number") @db.Text
+  partyRefDate         DateTime? @map("party_ref_date") @db.Date
+  affectsStock         Boolean   @default(true) @map("affects_stock")
+  validUntil           DateTime? @map("valid_until") @db.Date
+  reason               String?   @db.Text
+  approvalStatus       String?   @map("approval_status") @db.Text
+  approvedBy           String?   @map("approved_by") @db.Uuid
+  approvedAt           DateTime? @map("approved_at") @db.Timestamptz(6)
+  rejectionReason      String?   @map("rejection_reason") @db.Text
+  dispatchMode         String    @default("none") @map("dispatch_mode") @db.Text
+  deliveryStatus       String    @default("pending") @map("delivery_status") @db.Text
+  courierName          String?   @map("courier_name") @db.Text
+  trackingNumber       String?   @map("tracking_number") @db.Text
+  dispatchDate         DateTime? @map("dispatch_date") @db.Date
+  expectedDeliveryDate DateTime? @map("expected_delivery_date") @db.Date
+  deliveredDate        DateTime? @map("delivered_date") @db.Date
+  transportName        String?   @map("transport_name") @db.Text
+  lrNumber             String?   @map("lr_number") @db.Text
+  vehicleNumber        String?   @map("vehicle_number") @db.Text
+  cartons              Int?
+  freightType          String?   @map("freight_type") @db.Text
+  deliveryType         String?   @map("delivery_type") @db.Text
+  transportDetails     String?   @map("transport_details") @db.Text
+
+  organization   Organization?   @relation(fields: [orgId], references: [id])
+  client         Client?         @relation(fields: [clientId], references: [id])
+  contact        Contact?        @relation(fields: [contactId], references: [id])
+  sourceDoc      Invoice?        @relation("DocConversion", fields: [sourceDocId], references: [id], onDelete: SetNull)
+  derivedDocs    Invoice[]       @relation("DocConversion")
+  invoiceItems   InvoiceItem[]
+  notifications  Notification[]
+  payments       Payment[]
+  stockMovements StockMovement[]
 
   @@map("invoices")
 }
@@ -207,9 +267,13 @@ model InvoiceItem {
   isbn            String?  @db.Text
   author          String?  @db.Text
   orgId           String?  @map("org_id") @db.Uuid
+  itemId          String?  @map("item_id") @db.Uuid
+  binding         String?  @db.Text
+  damagedQty      Decimal  @default(0) @map("damaged_qty") @db.Decimal(10, 2)
 
-  invoice      Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  organization Organization? @relation(fields: [orgId], references: [id])
+  invoice       Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  organization  Organization?  @relation(fields: [orgId], references: [id])
+  inventoryItem InventoryItem? @relation(fields: [itemId], references: [id], onDelete: SetNull)
 
   @@map("invoice_items")
 }
@@ -260,8 +324,15 @@ model InventoryItem {
   searchVector    Unsupported("tsvector")? @map("search_vector")
   createdAt       DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   orgId           String?                  @map("org_id") @db.Uuid
+  binding         String?                  @db.Text
+  purchaseRate    Decimal                  @default(0) @map("purchase_rate") @db.Decimal(12, 2)
+  minStock        Int                      @default(0) @map("min_stock")
+  damagedStock    Int                      @default(0) @map("damaged_stock")
+  hsnCode         String?                  @map("hsn_code") @db.Text
 
-  organization Organization? @relation(fields: [orgId], references: [id])
+  organization   Organization?   @relation(fields: [orgId], references: [id])
+  invoiceItems   InvoiceItem[]
+  stockMovements StockMovement[]
 
   @@map("inventory_items")
 }
@@ -360,4 +431,75 @@ model PurchaseOrder {
   client       Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
   @@map("purchase_orders")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NUMBER SERIES  (independent numbering per document type)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model NumberSeries {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId       String   @map("org_id") @db.Uuid
+  docType     String   @map("doc_type") @db.Text
+  prefix      String   @db.Text
+  nextNumber  Int      @default(1) @map("next_number")
+  includeYear Boolean  @default(true) @map("include_year")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, docType])
+  @@map("number_series")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAYMENTS  (direction "in" = received from party, "out" = paid to party)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Payment {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId         String   @map("org_id") @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  clientId      String?  @map("client_id") @db.Uuid
+  invoiceId     String?  @map("invoice_id") @db.Uuid
+  direction     String   @db.Text
+  paymentNumber String?  @map("payment_number") @db.Text
+  amount        Decimal  @db.Decimal(12, 2)
+  paymentDate   DateTime @map("payment_date") @db.Date
+  mode          String   @default("cash") @db.Text
+  reference     String?  @db.Text
+  notes         String?  @db.Text
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  client       Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  invoice      Invoice?     @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  @@map("payments")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STOCK MOVEMENTS  (inventory stock = sum of qty_change; damaged = sum of damaged_change)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model StockMovement {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId         String   @map("org_id") @db.Uuid
+  itemId        String   @map("item_id") @db.Uuid
+  docId         String?  @map("doc_id") @db.Uuid
+  docType       String   @map("doc_type") @db.Text
+  movementDate  DateTime @default(now()) @map("movement_date") @db.Date
+  qtyChange     Int      @default(0) @map("qty_change")
+  damagedChange Int      @default(0) @map("damaged_change")
+  rate          Decimal  @default(0) @db.Decimal(12, 2)
+  reason        String?  @db.Text
+  userId        String?  @map("user_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  item         InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  doc          Invoice?      @relation(fields: [docId], references: [id], onDelete: Cascade)
+
+  @@map("stock_movements")
 }
