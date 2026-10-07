@@ -17,6 +17,10 @@ router.put('/', requirePermission('settings', 'update') as any, (req: any, res) 
   settingsController.update(req, res);
 });
 
+// Separate number series per document type (estimate numbers ≠ sales bill numbers).
+router.get('/numbering', settingsController.numbering);
+router.put('/numbering', requirePermission('settings', 'update') as any, settingsController.updateNumbering);
+
 router.post('/logo', requirePermission('settings', 'update') as any, upload.single('logo') as any, (req: any, res) => {
   settingsController.uploadLogo(req, res);
 });

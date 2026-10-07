@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth.middleware.js';
 import { inventoryService } from '../services/inventory.service.js';
+import { sendError } from '../lib/errors.js';
 
 export const inventoryController = {
   async getInventory(req: AuthenticatedRequest, res: Response) {
@@ -36,10 +37,10 @@ export const inventoryController = {
 
   async updateItem(req: AuthenticatedRequest, res: Response) {
     try {
-      const data = await inventoryService.updateItem(req.org.id, req.params.id, req.body);
+      const data = await inventoryService.updateItem(req.org.id, req.params.id, req.body, req.userId);
       res.json({ data, error: null, meta: null });
     } catch (err: any) {
-      res.status(500).json({ data: null, error: { message: err.message, code: 'SERVER_ERROR' }, meta: null });
+      sendError(res, err);
     }
   },
 

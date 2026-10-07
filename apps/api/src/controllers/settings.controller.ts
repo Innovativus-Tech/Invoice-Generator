@@ -3,6 +3,10 @@ import { AuthenticatedRequest } from '../middleware/auth.middleware.js';
 import { prisma } from '../lib/prisma.js';
 import { cacheGet, cacheSet, cacheDel, CacheKeys } from '../lib/cache.js';
 import { storageService } from '../services/storage.service.js';
+import { numberingService, SERIES_KEYS } from '../services/numbering.service.js';
+import { route } from '../lib/http.js';
+import { AppError } from '../lib/errors.js';
+import type { SeriesKey } from '../lib/doc-types.js';
 
 // BUG 4 FIX: Always return/update the org OWNER's profile, not the current user's.
 // All members share the owner's settings (currency, bank details, logo, etc.)
@@ -63,6 +67,31 @@ const ALLOWED_FIELDS: Record<string, string> = {
 };
 
 export class SettingsController {
+  /** Prefix and next number for every document type and payment series. */
+  numbering = route((req) => numberingService.list(req.org.id));
+
+  updateNumbering = route(async (req) => {
+    const rows = Array.isArray(req.body?.series) ? req.body.series : [];
+    for (const row of rows) {
+      if (!SERIES_KEYS.includes(row?.doc_type)) throw new AppError(`Unknown series: ${row?.doc_type}`, 422);
+      const prefix = typeof row.prefix === 'string' ? row.prefix.trim() : undefined;
+      if (prefix !== undefined && !/^[A-Za-z0-9/_-]{1,12}$/.test(prefix)) {
+        throw new AppError('Prefixes may use letters, digits, / _ - (up to 12 characters)', 422, 'VALIDATION_ERROR');
+      }
+      const next = row.next_number === undefined ? undefined : Number(row.next_number);
+      if (next !== undefined && (!Number.isInteger(next) || next < 1)) {
+        throw new AppError('Next number must be a whole number of 1 or more', 422, 'VALIDATION_ERROR');
+      }
+      await numberingService.update(req.org.id, row.doc_type as SeriesKey, {
+        prefix: prefix || undefined,
+        next_number: next,
+        include_year: typeof row.include_year === 'boolean' ? row.include_year : undefined,
+      });
+    }
+    await cacheDel(CacheKeys.settings(req.org.id), CacheKeys.nextInvoiceNumber(req.org.id));
+    return numberingService.list(req.org.id);
+  });
+
   async get(req: AuthenticatedRequest, res: Response) {
     try {
       const key = CacheKeys.settings(req.org.id);
@@ -87,6 +116,12 @@ export class SettingsController {
       }
 
       const serialized = serializeProfile(profile);
+      if (serialized) {
+        // Sales invoice numbering lives in number_series; mirror it here for the Defaults tab.
+        const series = await numberingService.ensureSeries(prisma, req.org.id, 'sales_invoice');
+        serialized.invoice_prefix = series.prefix;
+        serialized.next_invoice_number = series.nextNumber;
+      }
       await cacheSet(key, serialized, 300);
       res.json({ data: serialized, error: null, meta: null });
     } catch (err: any) {
@@ -115,7 +150,15 @@ export class SettingsController {
         create: { id: org.ownerId, orgId: req.org.id, ...updateData },
       });
 
-      await cacheDel(CacheKeys.settings(req.org.id));
+      if (req.body.invoice_prefix !== undefined || req.body.next_invoice_number !== undefined) {
+        const nextNumber = Number(req.body.next_invoice_number);
+        await numberingService.update(req.org.id, 'sales_invoice', {
+          ...(typeof req.body.invoice_prefix === 'string' && req.body.invoice_prefix.trim() && { prefix: req.body.invoice_prefix }),
+          ...(Number.isInteger(nextNumber) && nextNumber > 0 && { next_number: nextNumber }),
+        });
+      }
+
+      await cacheDel(CacheKeys.settings(req.org.id), CacheKeys.nextInvoiceNumber(req.org.id));
       res.json({ data: serializeProfile(profile), error: null, meta: null });
     } catch (err: any) {
       res.status(500).json({ data: null, error: { message: err.message, code: 'SERVER_ERROR' }, meta: null });
