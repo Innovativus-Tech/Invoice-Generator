@@ -1,9 +1,9 @@
 // Development-only login bypass: any email + password signs in.
 //
 // Enabled ONLY when AUTH_BYPASS=true and NODE_ENV is not "production".
-// The role comes from the email so every permission level can be tested:
-//   contains "staff" → staff, contains "admin" → admin, otherwise owner.
-// Everyone lands in one test organisation (DEV_ORG_NAME, default "Demo Business").
+// Each account keeps its own organisation: a user who already belongs to one
+// (e.g. through an invite) signs into it; a new email gets a fresh business of
+// its own as owner, so no two accounts ever see each other's data.
 
 import { prisma } from './prisma.js';
 
@@ -29,13 +29,7 @@ export function emailFromDevToken(token: string): string | null {
   return email.includes('@') ? email : null;
 }
 
-function roleFor(email: string): 'owner' | 'admin' | 'staff' {
-  if (email.includes('staff')) return 'staff';
-  if (email.includes('admin')) return 'admin';
-  return 'owner';
-}
-
-/** Creates (once) the user, the test organisation and the membership; returns what the auth middleware needs. */
+/** Creates (once) the user and, on first sign-in, their own organisation; returns what the auth middleware needs. */
 export async function ensureDevUser(rawEmail: string) {
   const email = rawEmail.trim().toLowerCase();
   const name = email.split('@')[0];
@@ -46,31 +40,28 @@ export async function ensureDevUser(rawEmail: string) {
     RETURNING id
   `;
 
-  const orgName = process.env.DEV_ORG_NAME || 'Demo Business';
-  let org = await prisma.organization.findFirst({ where: { name: orgName }, select: { id: true, name: true, ownerId: true } });
-  if (!org) {
-    org = await prisma.organization.create({
-      data: { name: orgName, slug: `demo-${Date.now().toString(36)}`, ownerId: user.id },
-      select: { id: true, name: true, ownerId: true },
-    });
-    await prisma.profile.upsert({
-      where: { id: user.id },
-      update: { orgId: org.id, businessName: orgName },
-      create: { id: user.id, orgId: org.id, businessName: orgName, businessEmail: email, currency: 'INR' },
-    });
+  const membership = await prisma.organizationMember.findFirst({
+    where: { userId: user.id, status: 'active' },
+    orderBy: { createdAt: 'asc' },
+    include: { organization: { select: { id: true, name: true } } },
+  });
+  if (membership?.organization) {
+    const { id, name: orgName } = membership.organization;
+    return { id: user.id, email, org: { id, name: orgName, role: membership.role as 'owner' | 'admin' | 'staff' } };
   }
 
-  const role = org.ownerId === user.id ? 'owner' : roleFor(email);
-  await prisma.organizationMember.upsert({
-    where: { orgId_userId: { orgId: org.id, userId: user.id } },
-    create: { orgId: org.id, userId: user.id, role, status: 'active' },
-    update: { role, status: 'active' },
+  // First sign-in: a separate business owned by this user.
+  const orgName = `${name}'s Business`;
+  const org = await prisma.organization.create({
+    data: { name: orgName, slug: `${name.replace(/[^a-z0-9]+/g, '-').slice(0, 40)}-${Date.now().toString(36)}`, ownerId: user.id },
+    select: { id: true, name: true },
   });
+  await prisma.organizationMember.create({ data: { orgId: org.id, userId: user.id, role: 'owner', status: 'active' } });
   await prisma.profile.upsert({
     where: { id: user.id },
-    update: { orgId: org.id },
-    create: { id: user.id, orgId: org.id, businessEmail: email },
+    update: { orgId: org.id, businessName: orgName },
+    create: { id: user.id, orgId: org.id, businessName: orgName, businessEmail: email, currency: 'INR' },
   });
 
-  return { id: user.id, email, org: { id: org.id, name: org.name, role } };
+  return { id: user.id, email, org: { id: org.id, name: org.name, role: 'owner' as const } };
 }
