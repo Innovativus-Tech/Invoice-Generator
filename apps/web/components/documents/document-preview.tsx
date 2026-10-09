@@ -76,7 +76,7 @@ export function DocumentPreview({ type, formData, profile, party, sourceNumber, 
   const d = formData;
   const items = d.items || [];
   const t = computeTotals({
-    items: items.map((i) => ({ quantity: i?.quantity || 0, unit_price: i?.unit_price || 0, discount_percent: i?.discount_percent, gst_rate: i?.gst_rate })),
+    items: items.map((i) => ({ quantity: i?.quantity || 0, unit_price: i?.unit_price || 0, discount_percent: i?.discount_percent, gst_rate: i?.gst_rate, binding_charge: i?.binding_charge })),
     extra_discount_type: d.extra_discount_type,
     extra_discount_value: d.extra_discount_value,
     postage_charge: d.postage_charge,
@@ -214,7 +214,11 @@ export function DocumentPreview({ type, formData, profile, party, sourceNumber, 
                         <div>{item.description || '—'}</div>
                         {showBook && item.isbn && <div style={{ fontSize: '7px', color: GRAY }}>ISBN: {item.isbn}</div>}
                         {showBook && item.author && <div style={{ fontSize: '7px', color: GRAY }}>Author: {item.author}</div>}
-                        {item.binding && <div style={{ fontSize: '7px', color: GRAY }}>Binding: {item.binding}</div>}
+                        {(item.binding || (item.binding_charge ?? 0) > 0) && (
+                          <div style={{ fontSize: '7px', color: GRAY }}>
+                            Binding: {item.binding || '—'}{(item.binding_charge ?? 0) > 0 && ui.side === 'purchase' ? ` @ ${fmt(item.binding_charge!)}/copy` : ''}
+                          </div>
+                        )}
                         {(item.damaged_qty ?? 0) > 0 && ui.tracksDamage && <div style={{ fontSize: '7px', color: '#B91C1C' }}>Damaged: {item.damaged_qty}</div>}
                       </td>
                       <td style={{ padding: '4px', textAlign: 'center' }}>{item.hsn_sac || ''}</td>

@@ -20,7 +20,7 @@ import type { ApprovalStatus, BillingDocument, DocType, DocumentFilters, Invoice
 
 type Action = { label: string; icon?: React.ReactNode; onClick?: () => void; danger?: boolean; separator?: boolean };
 
-export function DocumentListPage({ type }: { type: DocType }) {
+export function DocumentListPage({ type, embedded }: { type: DocType; embedded?: boolean }) {
   const ui = docUi(type);
   const router = useRouter();
   const params = useSearchParams();
@@ -84,13 +84,24 @@ export function DocumentListPage({ type }: { type: DocType }) {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={ui.plural} description={ui.description}>
-        {canCreate && (
-          <Button onClick={() => router.push(newDocPath(type))} icon={<Plus className="h-4 w-4" />}>
-            New {ui.label}
-          </Button>
-        )}
-      </PageHeader>
+      {embedded ? (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <p className="text-sm text-text-2">{ui.description}</p>
+          {canCreate && (
+            <Button onClick={() => router.push(newDocPath(type))} icon={<Plus className="h-4 w-4" />}>
+              New {ui.label}
+            </Button>
+          )}
+        </div>
+      ) : (
+        <PageHeader title={ui.plural} description={ui.description}>
+          {canCreate && (
+            <Button onClick={() => router.push(newDocPath(type))} icon={<Plus className="h-4 w-4" />}>
+              New {ui.label}
+            </Button>
+          )}
+        </PageHeader>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="!p-4">

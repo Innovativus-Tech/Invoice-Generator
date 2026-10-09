@@ -73,6 +73,7 @@ export function toDocumentPayload(values: DocumentFormValues) {
   return {
     ...values,
     cartons: values.cartons === null || Number.isNaN(values.cartons as number) ? null : values.cartons,
+    paid_now_amount: Number(values.paid_now_amount) || 0,
     items: values.items.map((item, i) => ({
       item_id: item.item_id || null,
       description: item.description,
@@ -85,6 +86,7 @@ export function toDocumentPayload(values: DocumentFormValues) {
       author: item.author || null,
       binding: item.binding || null,
       damaged_qty: Number(item.damaged_qty) || 0,
+      binding_charge: Number(item.binding_charge) || 0,
       sort_order: i,
     })),
   };

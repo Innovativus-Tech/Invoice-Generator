@@ -95,15 +95,21 @@ export function docTypeFromSlug(slug: string): DocType | null {
 }
 
 /** Route for a document list, a document, or one of its sub-pages. */
+function docBase(type: DocType) {
+  return type === 'sales_invoice' ? '/invoices' : `/documents/${DOC_TYPE_UI[type].slug}`;
+}
+
+/** Purchase-side lists live as tabs of the single Purchases section. */
+export const purchasesTabPath = (tab: string) => `/purchases?tab=${tab}`;
+
 export function docPath(type: DocType, id?: string, sub?: 'edit'): string {
-  const base = type === 'sales_invoice' ? '/invoices' : `/documents/${DOC_TYPE_UI[type].slug}`;
-  if (!id) return base;
-  return sub ? `${base}/${id}/${sub}` : `${base}/${id}`;
+  if (!id) return DOC_TYPE_UI[type].side === 'purchase' ? purchasesTabPath(DOC_TYPE_UI[type].slug) : docBase(type);
+  return sub ? `${docBase(type)}/${id}/${sub}` : `${docBase(type)}/${id}`;
 }
 
 export const newDocPath = (type: DocType, params?: Record<string, string>) => {
   const qs = params ? `?${new URLSearchParams(params).toString()}` : '';
-  return `${docPath(type)}/new${qs}`;
+  return `${docBase(type)}/new${qs}`;
 };
 
 export const BINDING_OPTIONS = ['Paperback', 'Hardbound', 'Spiral', 'Saddle Stitch', 'Board Book', 'Perfect Bound'];

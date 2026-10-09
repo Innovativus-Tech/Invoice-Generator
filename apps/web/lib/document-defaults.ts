@@ -14,6 +14,7 @@ export const blankLine = (): DocumentItem => ({
   item_id: null,
   binding: '',
   damaged_qty: 0,
+  binding_charge: 0,
 });
 
 export function emptyDocument(type: DocType): DocumentFormValues {
@@ -64,6 +65,9 @@ export function emptyDocument(type: DocType): DocumentFormValues {
     freight_type: '',
     delivery_type: '',
     transport_details: '',
+    paid_now_amount: 0,
+    paid_now_mode: 'cash',
+    paid_now_reference: '',
     items: [blankLine()],
   };
 }
@@ -149,6 +153,7 @@ export function documentToFormValues(doc: BillingDocument): DocumentFormValues {
       discount_percent: Number(i.discount_percent ?? 0),
       binding: i.binding ?? '',
       damaged_qty: Number(i.damaged_qty ?? 0),
+      binding_charge: Number(i.binding_charge ?? 0),
       isbn: i.isbn ?? '',
       author: i.author ?? '',
     })),

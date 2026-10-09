@@ -31,6 +31,7 @@ const defaultForm: InventoryFormValues = {
   stock: 0,
   binding: '',
   purchase_rate: 0,
+  binding_charge: 0,
   min_stock: 0,
   hsn_code: '',
 };
@@ -55,6 +56,7 @@ export function InventoryForm({ open, onClose, item, onSave, loading }: Inventor
         stock: item.stock ?? 0,
         binding: item.binding || '',
         purchase_rate: item.purchase_rate ?? 0,
+        binding_charge: item.binding_charge ?? 0,
         min_stock: item.min_stock ?? 0,
         hsn_code: item.hsn_code || '',
       });
@@ -171,7 +173,21 @@ export function InventoryForm({ open, onClose, item, onSave, loading }: Inventor
                       value={form.purchase_rate || ''}
                       onChange={(e) => setForm({ ...form, purchase_rate: parseFloat(e.target.value) || 0 })}
                     />
-                    <p className="mt-1 text-xs text-text-2">Rate from binder / supplier. Updated by each purchase bill.</p>
+                    <p className="mt-1 text-xs text-text-2">Book rate from binder / supplier. Updated by each purchase bill.</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Input
+                      label="Binding charge / copy (₹)"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={form.binding_charge || ''}
+                      onChange={(e) => setForm({ ...form, binding_charge: parseFloat(e.target.value) || 0 })}
+                    />
+                    <p className="mt-1 text-xs text-text-2">Cost per copy = book rate + binding charge.</p>
                   </div>
                 </div>
 

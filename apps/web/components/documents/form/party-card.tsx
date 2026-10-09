@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
-import { AlertTriangle, Banknote, BookOpenCheck, Info } from 'lucide-react';
+import { AlertTriangle, Banknote, BookOpenCheck, Info, SplitSquareHorizontal } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Segmented } from '@/components/ui/segmented';
@@ -10,24 +10,32 @@ import { PartyCombobox } from '@/components/parties/party-combobox';
 import { PartyDrawer } from '@/components/parties/party-drawer';
 import { useCreateClient } from '@/hooks/use-clients';
 import { usePermissions } from '@/hooks/use-permissions';
-import { docUi } from '@/lib/doc-types';
 import { partyFields } from '@/lib/document-defaults';
 import { computeTotals } from '@/lib/totals';
 import { addDaysISO, inr } from '@/lib/utils';
-import type { Client, DocType, DocumentFormValues, PaymentMode } from '@/types';
+import { PAYMENT_METHOD_LABEL, docUi } from '@/lib/doc-types';
+import type { Client, DocType, DocumentFormValues, PaymentMethod, PaymentMode } from '@/types';
+
+type PayOption = 'cash' | 'credit' | 'partial';
 
 interface PartyCardProps {
   type: DocType;
   parties: Client[];
+  /** Advances can only be recorded on new bills; later payments use "Receive / Make payment". */
+  isEdit?: boolean;
 }
 
-export function PartyCard({ type, parties }: PartyCardProps) {
+const fieldCls =
+  'w-full h-10 rounded-md border border-border bg-white px-3 text-sm text-text-1 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary dark:bg-card';
+
+export function PartyCard({ type, parties, isEdit }: PartyCardProps) {
   const ui = docUi(type);
   const { setValue, getValues, register, formState: { errors } } = useFormContext<DocumentFormValues>();
   const [clientId, paymentMode, items, discType, discValue, postage, other, roundOff] = useWatch<DocumentFormValues>({
     name: ['client_id', 'payment_mode', 'items', 'extra_discount_type', 'extra_discount_value', 'postage_charge', 'other_charges', 'apply_round_off'],
   }) as [string | null, PaymentMode, DocumentFormValues['items'], 'percent' | 'amount', number, number, number, boolean];
   const [drawer, setDrawer] = useState<{ open: boolean; name: string }>({ open: false, name: '' });
+  const [partial, setPartial] = useState(() => (getValues('paid_now_amount') ?? 0) > 0);
   const createClient = useCreateClient();
   const { can } = usePermissions();
 
@@ -57,9 +65,18 @@ export function PartyCard({ type, parties }: PartyCardProps) {
     }
   };
 
+  const payOption: PayOption = paymentMode === 'cash' ? 'cash' : partial ? 'partial' : 'credit';
+
+  const setOption = (option: PayOption) => {
+    setPartial(option === 'partial');
+    if (option !== 'partial') setValue('paid_now_amount', 0);
+    setMode(option === 'cash' ? 'cash' : 'credit');
+  };
+
   const setMode = (mode: PaymentMode) => {
+    const wasCash = getValues('payment_mode') === 'cash';
     setValue('payment_mode', mode, { shouldDirty: true });
-    if (mode === 'credit') {
+    if (mode === 'credit' && wasCash) {
       const days = party?.credit_days ?? 0;
       setValue('credit_days', days);
       setValue('due_date', addDaysISO(getValues('issue_date'), days));
@@ -68,7 +85,7 @@ export function PartyCard({ type, parties }: PartyCardProps) {
 
   // Credit limit warning: current balance + this bill.
   const billTotal = computeTotals({
-    items: (items ?? []).map((i) => ({ quantity: i?.quantity ?? 0, unit_price: i?.unit_price ?? 0, discount_percent: i?.discount_percent, gst_rate: i?.gst_rate })),
+    items: (items ?? []).map((i) => ({ quantity: i?.quantity ?? 0, unit_price: i?.unit_price ?? 0, discount_percent: i?.discount_percent, gst_rate: i?.gst_rate, binding_charge: i?.binding_charge })),
     extra_discount_type: discType, extra_discount_value: discValue, postage_charge: postage, other_charges: other, apply_round_off: roundOff,
   }).total;
   const limit = party?.credit_limit ?? 0;
@@ -82,19 +99,37 @@ export function PartyCard({ type, parties }: PartyCardProps) {
       <div className="flex flex-col gap-4">
         {ui.isBill && (
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-            <span className="text-sm font-semibold text-text-2 uppercase tracking-wider sm:w-28">Bill type</span>
-            <Segmented<PaymentMode>
+            <span className="text-sm font-semibold text-text-2 uppercase tracking-wider sm:w-28">Payment</span>
+            <Segmented<PayOption>
               size="lg"
-              ariaLabel="Bill type"
-              value={paymentMode}
-              onChange={setMode}
+              ariaLabel="Payment"
+              value={payOption}
+              onChange={setOption}
+              className="flex-wrap"
               options={[
-                { value: 'cash', label: ui.side === 'sales' ? 'Cash Sale' : 'Cash Purchase', icon: <Banknote className="h-4 w-4" />, hint: 'Paid now. Party is optional (walk-in customers).' },
-                { value: 'credit', label: ui.side === 'sales' ? 'Credit Sale' : 'Credit Purchase', icon: <BookOpenCheck className="h-4 w-4" />, hint: "Goes to the party's ledger; due after their credit days." },
+                {
+                  value: 'cash',
+                  label: ui.side === 'sales' ? 'Cash Sale' : 'Paid Upfront',
+                  icon: <Banknote className="h-4 w-4" />,
+                  hint: ui.side === 'sales' ? 'Paid now. Party is optional (walk-in customers).' : 'Paid in full at purchase.',
+                },
+                {
+                  value: 'credit',
+                  label: ui.side === 'sales' ? 'Credit Sale' : 'On Credit',
+                  icon: <BookOpenCheck className="h-4 w-4" />,
+                  hint: "Goes to the party's ledger; due after the credit period.",
+                },
+                ...(!isEdit
+                  ? [{ value: 'partial' as const, label: 'Part Paid', icon: <SplitSquareHorizontal className="h-4 w-4" />, hint: 'Some paid now, the rest on credit.' }]
+                  : []),
               ]}
             />
             <p className="text-xs text-text-2">
-              {isCash ? 'Paid on the spot — no balance is left on the party.' : "Added to the party's account and due after their credit days."}
+              {payOption === 'cash'
+                ? 'Settled in full now — no balance is left on the party.'
+                : payOption === 'partial'
+                  ? 'Enter the amount paid now; the rest goes on credit.'
+                  : "Added to the party's account and due after the credit period."}
             </p>
           </div>
         )}
@@ -116,6 +151,38 @@ export function PartyCard({ type, parties }: PartyCardProps) {
             </div>
           )}
         </div>
+
+        {ui.isBill && !isCash && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 rounded-lg bg-surface/70 p-3 dark:bg-border/10">
+            <div>
+              <label className="block text-sm font-medium text-text-1 mb-1.5">Credit period (days)</label>
+              <input type="number" min={0} {...register('credit_days', { valueAsNumber: true })} className={fieldCls} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-1 mb-1.5">Due date</label>
+              <input type="date" {...register('due_date')} className={fieldCls} />
+            </div>
+            {payOption === 'partial' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-text-1 mb-1.5">Paid now (₹)</label>
+                  <input type="number" min={0} step="0.01" placeholder="0" {...register('paid_now_amount', { valueAsNumber: true })} className={fieldCls} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-1 mb-1.5">Paid by</label>
+                  <select {...register('paid_now_mode')} className={fieldCls}>
+                    {(['cash', 'upi', 'bank', 'cheque', 'card', 'other'] as PaymentMethod[]).map((m) => (
+                      <option key={m} value={m}>{PAYMENT_METHOD_LABEL[m]}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-span-2 lg:col-span-4">
+                  <input placeholder="Cheque / UTR / reference (optional)" {...register('paid_now_reference')} className={fieldCls} />
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {isCash && !party && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

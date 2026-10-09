@@ -20,10 +20,6 @@ import {
   Truck,
   Undo2,
   FileMinus,
-  FilePlus,
-  BookCopy,
-  Redo2,
-  Receipt,
   Wallet,
   Clock,
   BarChart3,
@@ -34,13 +30,15 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
 import { usePermissions } from '@/hooks/use-permissions';
 import { useDocuments } from '@/hooks/use-documents';
-import { docPath } from '@/lib/doc-types';
+import { DOC_TYPE_UI, docPath } from '@/lib/doc-types';
 
 interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
   badge?: number;
+  /** Extra path prefixes that also highlight this item. */
+  match?: string[];
 }
 
 interface NavGroup {
@@ -73,11 +71,12 @@ export function Sidebar() {
     {
       title: 'Purchase',
       items: [
-        { href: docPath('purchase_bill'), label: 'Purchase Bills', icon: ShoppingCart },
-        { href: docPath('binding_order'), label: 'Binding Orders', icon: BookCopy },
-        { href: docPath('purchase_return'), label: 'Purchase Returns', icon: Redo2 },
-        { href: docPath('debit_note'), label: 'Debit Notes', icon: FilePlus },
-        { href: '/purchases', label: 'Quick Purchases', icon: Receipt },
+        {
+          href: '/purchases',
+          label: 'Purchases',
+          icon: ShoppingCart,
+          match: (['purchase_bill', 'binding_order', 'purchase_return', 'debit_note'] as const).map((t) => `/documents/${DOC_TYPE_UI[t].slug}`),
+        },
       ],
     },
     {
@@ -175,7 +174,7 @@ export function Sidebar() {
               )}
               {group.title && collapsed && <div className="mx-3 my-2 h-px bg-white/10" />}
               {group.items.map((item) => {
-                const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                const isActive = [item.href, ...(item.match ?? [])].some((p) => pathname === p || pathname.startsWith(`${p}/`));
                 const Icon = item.icon;
                 return (
                   <Link

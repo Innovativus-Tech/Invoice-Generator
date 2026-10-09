@@ -126,7 +126,7 @@ export function DocumentForm({ type, defaultValues, parties, isEdit, sourceDoc, 
             items: values.items.map((item, i) => ({
               ...item,
               sort_order: i,
-              amount: (item.quantity || 0) * (item.unit_price || 0) * (1 - (item.discount_percent || 0) / 100),
+              amount: (item.quantity || 0) * ((item.unit_price || 0) + (item.binding_charge || 0)) * (1 - (item.discount_percent || 0) / 100),
             })),
           },
           intent
@@ -165,7 +165,7 @@ export function DocumentForm({ type, defaultValues, parties, isEdit, sourceDoc, 
           </div>
         )}
 
-        <PartyCard type={type} parties={parties} />
+        <PartyCard type={type} parties={parties} isEdit={isEdit} />
 
         {/* Details */}
         <Card>
@@ -176,12 +176,6 @@ export function DocumentForm({ type, defaultValues, parties, isEdit, sourceDoc, 
               {!isEdit && <p className="mt-1 text-xs text-text-2">Own series for {ui.plural.toLowerCase()}.</p>}
             </div>
             <Input label="Date" type="date" {...register('issue_date')} error={errors.issue_date?.message} />
-            {ui.isBill && paymentMode === 'credit' && (
-              <div className="grid grid-cols-2 gap-3">
-                <Input label="Credit days" type="number" min={0} {...register('credit_days', { valueAsNumber: true })} />
-                <Input label="Due date" type="date" {...register('due_date')} />
-              </div>
-            )}
             {type === 'estimate' && <Input label="Valid until" type="date" {...register('valid_until')} />}
             {ui.side === 'purchase' && type !== 'binding_order' && (
               <>

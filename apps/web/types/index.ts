@@ -327,6 +327,7 @@ export interface InventoryItem {
   stock: number;
   binding?: string | null;
   purchase_rate?: number;
+  binding_charge?: number;
   min_stock?: number;
   damaged_stock?: number;
   hsn_code?: string | null;
@@ -348,6 +349,7 @@ export interface InventoryFormValues {
   stock: number;
   binding: string;
   purchase_rate: number;
+  binding_charge: number;
   min_stock: number;
   hsn_code: string;
 }
@@ -444,6 +446,8 @@ export interface DocumentItem extends InvoiceItem {
   item_id?: string | null;
   binding?: string | null;
   damaged_qty?: number;
+  /** Per-copy binding charge (purchase lines), added to the rate. */
+  binding_charge?: number;
 }
 
 /** Fields shared by the document form and the API payload. */
@@ -497,6 +501,17 @@ export interface DocumentFields {
 
 export interface DocumentFormValues extends DocumentFields {
   items: DocumentItem[];
+  /** Advance paid when a credit bill is created (new bills only). */
+  paid_now_amount?: number;
+  paid_now_mode?: PaymentMethod;
+  paid_now_reference?: string;
+}
+
+export interface BindingRate {
+  id?: string;
+  name: string;
+  charge: number;
+  sort_order?: number;
 }
 
 export interface DocumentLink {
@@ -755,6 +770,8 @@ export interface StockRow {
   binding: string | null;
   price: number;
   purchase_rate: number;
+  binding_charge: number;
+  landed_cost: number;
   stock: number;
   damaged_stock: number;
   min_stock: number;

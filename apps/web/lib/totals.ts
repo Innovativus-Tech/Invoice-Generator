@@ -6,6 +6,8 @@ export interface TotalsLine {
   unit_price: number;
   discount_percent?: number | null;
   gst_rate?: number | null;
+  /** Per-copy binding charge (purchase lines), added to the rate. */
+  binding_charge?: number | null;
 }
 
 export interface TotalsInput {
@@ -39,7 +41,8 @@ export const gstRateOf = (rate: number | null | undefined) => (rate == null || N
 
 export function lineAmount(line: TotalsLine): number {
   const disc = Math.min(Math.max(num(line.discount_percent), 0), 100);
-  return round2(num(line.quantity) * num(line.unit_price) * (1 - disc / 100));
+  const rate = num(line.unit_price) + Math.max(num(line.binding_charge), 0);
+  return round2(num(line.quantity) * rate * (1 - disc / 100));
 }
 
 export function computeTotals(input: TotalsInput): Totals {

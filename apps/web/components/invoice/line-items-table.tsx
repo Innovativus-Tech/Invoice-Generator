@@ -27,7 +27,8 @@ import { Button } from '@/components/ui/button';
 import { formatIndianCurrency } from '@/lib/utils';
 import { useSettings } from '@/hooks/use-settings';
 import { BINDING_OPTIONS, docUi } from '@/lib/doc-types';
-import type { DocType, DocumentFormValues, DocumentItem, InventoryItem } from '@/types';
+import { rateFor, useBindingRates } from '@/hooks/use-binding-rates';
+import type { BindingRate, DocType, DocumentFormValues, DocumentItem, InventoryItem } from '@/types';
 
 function InventorySearchInput({
   value,
@@ -213,11 +214,18 @@ function InventorySearchInput({
   );
 }
 
-/** Line values to copy from an inventory item. Purchase documents default to the purchase rate. */
-export function lineFromInventory(item: InventoryItem, docType: DocType): Partial<DocumentItem> {
+/**
+ * Line values to copy from an inventory item. Purchase documents default to the
+ * book's purchase rate plus its binding charge (last paid, else the rate card).
+ */
+export function lineFromInventory(item: InventoryItem, docType: DocType, rates?: BindingRate[]): Partial<DocumentItem> {
   const usePurchase = docUi(docType).usesPurchaseRate;
   const rate = usePurchase ? (item.purchase_rate || item.price) : item.price;
+  const bindingCharge = docUi(docType).side === 'purchase'
+    ? (item.binding_charge || rateFor(rates, item.binding) || 0)
+    : 0;
   return {
+    binding_charge: bindingCharge,
     item_id: item.id,
     description: item.book_title,
     gst_rate: item.gst_rate,
@@ -235,12 +243,14 @@ function SortableRow({
   onRemove,
   showBookMetadata,
   docType,
+  rates,
 }: {
   id: string;
   index: number;
   onRemove: () => void;
   showBookMetadata: boolean;
   docType: DocType;
+  rates: BindingRate[];
 }) {
   const { register, watch, setValue, trigger } = useFormContext<DocumentFormValues>();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -250,7 +260,7 @@ function SortableRow({
   function handleInventorySelect(rowIndex: number, item: InventoryItem) {
     // Linking the row to the inventory item is what makes this line move stock.
     // ISBN/Author are always copied; they only print when the org enables them.
-    for (const [key, value] of Object.entries(lineFromInventory(item, docType))) {
+    for (const [key, value] of Object.entries(lineFromInventory(item, docType, rates))) {
       setValue(`items.${rowIndex}.${key}` as Path<DocumentFormValues>, value as never);
     }
     // Trigger recalculation of amount by triggering the fields if needed, 
@@ -273,10 +283,12 @@ function SortableRow({
 
   const itemId = watch(`items.${index}.item_id`);
   const ui = docUi(docType);
+  const chargesBinding = ui.side === 'purchase';
   const qty = watch(`items.${index}.quantity`) || 0;
+  const bindingCharge = watch(`items.${index}.binding_charge`) || 0;
   const price = watch(`items.${index}.unit_price`) || 0;
   const disc = watch(`items.${index}.discount_percent`) || 0;
-  const amount = qty * price * (1 - disc / 100);
+  const amount = qty * (price + (chargesBinding ? bindingCharge : 0)) * (1 - disc / 100);
 
   React.useEffect(() => {
     setValue(`items.${index}.amount`, amount);
@@ -329,7 +341,13 @@ function SortableRow({
             <span className="text-[10px] text-text-2 whitespace-nowrap" title="Pick the book from the suggestions to track its stock">Not in stock list</span>
           ) : null}
           <input
-            {...register(`items.${index}.binding`)}
+            {...register(`items.${index}.binding`, {
+              // Purchase lines take the binding charge from the rate card.
+              onChange: (e) => {
+                const charge = rateFor(rates, e.target.value);
+                if (chargesBinding && charge !== undefined) setValue(`items.${index}.binding_charge`, charge);
+              },
+            })}
             list="binding-options"
             placeholder="Binding"
             className={`${inputCls} text-xs`}
@@ -414,6 +432,21 @@ function SortableRow({
         />
       </td>
 
+      {/* Binding charge per copy (purchases) */}
+      {chargesBinding && (
+        <td className="px-1 py-1 w-24">
+          <input
+            {...register(`items.${index}.binding_charge`, { valueAsNumber: true })}
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="0"
+            title="Binding charge per copy — filled from the binding rate card, editable"
+            className={`${inputCls} text-right`}
+          />
+        </td>
+      )}
+
       {/* Disc. % */}
       <td className="px-1 py-1 w-16">
         <input
@@ -455,6 +488,8 @@ interface LineItemsTableProps {
 
 export function LineItemsTable({ docType = 'sales_invoice' }: LineItemsTableProps) {
   const ui = docUi(docType);
+  const { data: rates = [] } = useBindingRates();
+  const bindingNames = Array.from(new Set([...rates.map((r) => r.name), ...BINDING_OPTIONS]));
   const [inventoryModalOpen, setInventoryModalOpen] = useState(false);
   const { data: settings } = useSettings();
   const showBookMetadata = settings?.show_book_metadata ?? false;
@@ -491,6 +526,7 @@ export function LineItemsTable({ docType = 'sales_invoice' }: LineItemsTableProp
       item_id: null,
       binding: '',
       damaged_qty: 0,
+      binding_charge: 0,
     });
   };
 
@@ -499,7 +535,7 @@ export function LineItemsTable({ docType = 'sales_invoice' }: LineItemsTableProp
   return (
     <div className="space-y-3">
       <div className="border border-border rounded-lg overflow-x-auto">
-        <table className="w-full text-sm min-w-[860px]">
+        <table className="w-full text-sm min-w-[940px]">
           <thead>
             <tr className="bg-surface dark:bg-[#0F0E17] border-b border-border">
               <th className="px-1 py-2 w-6" />
@@ -509,7 +545,8 @@ export function LineItemsTable({ docType = 'sales_invoice' }: LineItemsTableProp
               <th className={`${thCls} w-20 text-center`}>GST Rate (%)</th>
               <th className={`${thCls} w-16 text-center`}>Qty</th>
               {ui.tracksDamage && <th className={`${thCls} w-16 text-center text-red-600`} title="Damaged copies">Damaged</th>}
-              <th className={`${thCls} w-24 text-right`}>{ui.usesPurchaseRate ? 'Purchase Rate' : 'Rate per Pcs'}</th>
+              <th className={`${thCls} w-24 text-right`}>{ui.usesPurchaseRate ? (ui.side === 'purchase' ? 'Book Rate' : 'Purchase Rate') : 'Rate per Pcs'}</th>
+              {ui.side === 'purchase' && <th className={`${thCls} w-24 text-right`} title="Per copy, from the binding rate card">Binding / copy</th>}
               <th className={`${thCls} w-16 text-center`}>Disc. %</th>
               <th className={`${thCls} w-28 text-right`}>Amount</th>
               <th className="px-1 py-2 w-8" />
@@ -526,6 +563,7 @@ export function LineItemsTable({ docType = 'sales_invoice' }: LineItemsTableProp
                     onRemove={() => remove(index)}
                     showBookMetadata={showBookMetadata}
                     docType={docType}
+                    rates={rates}
                   />
                 ))}
               </tbody>
@@ -560,7 +598,7 @@ export function LineItemsTable({ docType = 'sales_invoice' }: LineItemsTableProp
         open={inventoryModalOpen}
         onClose={() => setInventoryModalOpen(false)}
         onAddItem={(item) => {
-          const line = lineFromInventory(item, docType);
+          const line = lineFromInventory(item, docType, rates);
           append({
             quantity: 1,
             unit_price: 0,
@@ -576,7 +614,7 @@ export function LineItemsTable({ docType = 'sales_invoice' }: LineItemsTableProp
         }}
       />
       <datalist id="binding-options">
-        {BINDING_OPTIONS.map((b) => <option key={b} value={b} />)}
+        {bindingNames.map((b) => <option key={b} value={b} />)}
       </datalist>
     </div>
   );

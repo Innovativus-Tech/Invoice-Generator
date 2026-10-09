@@ -28,7 +28,7 @@ export function ChargesCard({ type }: { type: DocType }) {
   const items = v.items ?? [];
 
   const t = computeTotals({
-    items: items.map((i) => ({ quantity: i?.quantity ?? 0, unit_price: i?.unit_price ?? 0, discount_percent: i?.discount_percent, gst_rate: i?.gst_rate })),
+    items: items.map((i) => ({ quantity: i?.quantity ?? 0, unit_price: i?.unit_price ?? 0, discount_percent: i?.discount_percent, gst_rate: i?.gst_rate, binding_charge: i?.binding_charge })),
     extra_discount_type: v.extra_discount_type,
     extra_discount_value: v.extra_discount_value,
     postage_charge: v.postage_charge,
@@ -40,6 +40,10 @@ export function ChargesCard({ type }: { type: DocType }) {
   const half = rates.length === 1 ? `${rates[0] / 2}%` : 'mixed';
   const fmt = formatIndianCurrency;
   const isCreditBill = ui.isBill && v.payment_mode === 'credit';
+  const bindingTotal = ui.side === 'purchase'
+    ? items.reduce((sum, i) => sum + (i?.quantity || 0) * (i?.binding_charge || 0) * (1 - (i?.discount_percent || 0) / 100), 0)
+    : 0;
+  const paidNow = Math.min(Number(v.paid_now_amount) || 0, t.total);
 
   return (
     <Card>
@@ -92,6 +96,7 @@ export function ChargesCard({ type }: { type: DocType }) {
         <div className="space-y-2 lg:border-l lg:border-border lg:pl-6">
           <h3 className="text-sm font-semibold text-text-2 uppercase tracking-wider mb-2">Totals</h3>
           <Row label="Subtotal" value={fmt(t.subtotal)} />
+          {bindingTotal > 0 && <Row label="↳ includes binding charges" value={fmt(bindingTotal)} muted />}
           {t.extraDiscount > 0 && (
             <>
               <Row label={`Extra discount${v.extra_discount_type === 'percent' ? ` (${v.extra_discount_value}%)` : ''}`} value={`− ${fmt(t.extraDiscount)}`} />
@@ -114,6 +119,12 @@ export function ChargesCard({ type }: { type: DocType }) {
           <div className="pt-3 mt-1 border-t-2 border-primary">
             <Row label={type === 'estimate' ? 'Approximate total' : 'Total'} value={fmt(t.total)} strong />
           </div>
+          {isCreditBill && paidNow > 0 && (
+            <>
+              <Row label="Paid now" value={`− ${fmt(paidNow)}`} />
+              <Row label="Balance on credit" value={fmt(t.total - paidNow)} />
+            </>
+          )}
           {isCreditBill && v.due_date && (
             <p className="text-xs text-text-2 text-right">Due on {shortDate(v.due_date)}{v.credit_days ? ` (${v.credit_days} days credit)` : ''}</p>
           )}
