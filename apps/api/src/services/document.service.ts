@@ -179,6 +179,7 @@ function serializeDetail(d: DetailDoc) {
       author: item.author,
       binding: item.binding,
       damaged_qty: n(item.damagedQty),
+      binding_charge: n(item.bindingCharge),
     })),
     source_doc: d.sourceDoc
       ? {
@@ -214,7 +215,7 @@ export type SerializedDocument = ReturnType<typeof serializeDetail>;
 
 // ─── Input merging ────────────────────────────────────────────────────────────
 
-type MergedInput = Omit<CreateDocumentInput, 'doc_type'> & { doc_type: DocType };
+type MergedInput = Omit<CreateDocumentInput, 'doc_type' | 'paid_now_amount' | 'paid_now_mode' | 'paid_now_reference'> & { doc_type: DocType };
 
 function existingAsInput(d: DetailDoc): MergedInput {
   return {
@@ -278,6 +279,7 @@ function existingAsInput(d: DetailDoc): MergedInput {
       author: i.author,
       binding: i.binding,
       damaged_qty: n(i.damagedQty),
+      binding_charge: n(i.bindingCharge),
     })),
   };
 }
@@ -381,9 +383,14 @@ export class DocumentService {
   }
 
   async create(orgId: string, actor: Actor, input: CreateDocumentInput) {
+    const { paid_now_amount, paid_now_mode, paid_now_reference, ...docInput } = input;
     const id = await prisma.$transaction(async (tx) => {
-      const merged: MergedInput = { ...input, status: input.status ?? 'draft' };
-      return this.save(tx, orgId, actor, merged, null, sentKeys(input));
+      const merged: MergedInput = { ...docInput, status: docInput.status ?? 'draft' };
+      const docId = await this.save(tx, orgId, actor, merged, null, sentKeys(docInput));
+      if (paid_now_amount && paid_now_amount > 0) {
+        await this.recordAdvance(tx, orgId, actor, docId, paid_now_amount, paid_now_mode ?? 'cash', paid_now_reference ?? null);
+      }
+      return docId;
     }, TX_OPTIONS);
     await this.afterChange(orgId, id, actor);
     return this.get(orgId, id);
@@ -458,7 +465,7 @@ export class DocumentService {
     // Lines
     const lines = await this.prepareLines(tx, orgId, type, input.items);
     const totals = computeTotals({
-      items: lines.map((l) => ({ quantity: n(l.quantity), unit_price: n(l.unitPrice), discount_percent: n(l.discountPercent), gst_rate: l.gstRate == null ? null : n(l.gstRate) })),
+      items: lines.map((l) => ({ quantity: n(l.quantity), unit_price: n(l.unitPrice), discount_percent: n(l.discountPercent), gst_rate: l.gstRate == null ? null : n(l.gstRate), binding_charge: n(l.bindingCharge) })),
       extra_discount_type: input.extra_discount_type,
       extra_discount_value: input.extra_discount_value,
       postage_charge: input.postage_charge,
@@ -585,12 +592,39 @@ export class DocumentService {
     return docId;
   }
 
+  /** Part payment made when a credit bill is created (e.g. advance paid to the binder). */
+  private async recordAdvance(tx: Tx, orgId: string, actor: Actor, docId: string, amount: number, mode: string, reference: string | null) {
+    const doc = await tx.invoice.findUniqueOrThrow({ where: { id: docId } });
+    const cfg = docConfig(doc.docType);
+    if (!cfg.isBill || doc.paymentMode !== 'credit') return;
+    const paid = round2(Math.min(amount, n(doc.total)));
+    if (paid <= 0) return;
+    const today = parseISODate(todayISO());
+    await tx.payment.create({
+      data: {
+        orgId,
+        userId: actor.id,
+        clientId: doc.clientId,
+        invoiceId: doc.id,
+        direction: cfg.side === 'sales' ? 'in' : 'out',
+        paymentNumber: await numberingService.allocate(tx, orgId, cfg.side === 'sales' ? 'payment_in' : 'payment_out', today),
+        amount: paid,
+        paymentDate: doc.issueDate,
+        mode,
+        reference,
+        notes: 'Paid at the time of billing',
+      },
+    });
+    await ledgerService.recompute(tx, orgId, [doc.clientId], doc.id);
+  }
+
   private async prepareLines(tx: Tx, orgId: string, type: DocType, items: DocumentLineInput[]) {
     const ids = [...new Set(items.map((i) => i.item_id).filter((x): x is string => !!x))];
     const known = ids.length
       ? new Set((await tx.inventoryItem.findMany({ where: { id: { in: ids }, orgId }, select: { id: true } })).map((r) => r.id))
       : new Set<string>();
     const tracksDamage = DAMAGE_TRACKED.includes(type);
+    const chargesBinding = docConfig(type).side === 'purchase';
 
     return items.map((item, index) => ({
       orgId,
@@ -607,6 +641,8 @@ export class DocumentService {
       author: item.author ?? null,
       binding: item.binding ?? null,
       damagedQty: tracksDamage ? Math.min(item.damaged_qty ?? 0, item.quantity) : 0,
+      // Binding is charged by binders/suppliers, so only purchase-side documents carry it.
+      bindingCharge: chargesBinding ? item.binding_charge ?? 0 : 0,
     }));
   }
 

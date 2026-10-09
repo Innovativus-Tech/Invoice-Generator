@@ -21,6 +21,7 @@ export const documentLineSchema = z
     author: optString(300),
     binding: optString(100),
     damaged_qty: optMoney,
+    binding_charge: optMoney,
   })
   .refine((l) => (l.damaged_qty ?? 0) <= (l.quantity ?? 0), {
     message: 'Damaged quantity cannot exceed quantity',
@@ -79,6 +80,10 @@ const documentFields = {
 export const createDocumentSchema = z.object({
   doc_type: docTypeSchema,
   ...documentFields,
+  // Advance paid at the time of a credit bill (recorded as a payment against it).
+  paid_now_amount: optMoney,
+  paid_now_mode: z.enum(['cash', 'upi', 'bank', 'cheque', 'card', 'other']).optional(),
+  paid_now_reference: optString(100),
   items: z.array(documentLineSchema).min(1, 'At least one line item is required').max(500),
 });
 

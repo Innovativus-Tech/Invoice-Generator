@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { supabase } from '../lib/supabase.js';
 import { prisma } from '../lib/prisma.js';
+import { emailFromDevToken, ensureDevUser, isAuthBypassEnabled } from '../lib/dev-auth.js';
 
 export interface AuthenticatedRequest<
   P = any,
@@ -41,6 +42,20 @@ export async function authMiddleware(
     }
 
     const token = authHeader.split(' ')[1];
+
+    // Development-only bypass (AUTH_BYPASS=true, never in production).
+    const devEmail = isAuthBypassEnabled() ? emailFromDevToken(token) : null;
+    if (devEmail) {
+      const dev = await ensureDevUser(devEmail);
+      const r = req as AuthenticatedRequest;
+      r.userId = dev.id;
+      r.userEmail = dev.email;
+      r.accessToken = token;
+      r.user = { id: dev.id, email: dev.email };
+      r.org = dev.org;
+      next();
+      return;
+    }
 
     // Verify JWT — must use auth client (not Prisma, which has no auth table)
     const { data: { user }, error } = await supabase.auth.getUser(token);

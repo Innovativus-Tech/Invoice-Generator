@@ -24,6 +24,7 @@ function mapItem(item: any) {
     stock: item.stock ?? 0,
     binding: item.binding ?? null,
     purchase_rate: item.purchaseRate != null ? Number(item.purchaseRate) : 0,
+    binding_charge: item.bindingCharge != null ? Number(item.bindingCharge) : 0,
     min_stock: item.minStock ?? 0,
     damaged_stock: item.damagedStock ?? 0,
     hsn_code: item.hsnCode ?? null,
@@ -52,6 +53,7 @@ function itemFields(itemData: any) {
     gstRate: itemData.gst_rate ?? 0,
     binding: itemData.binding || null,
     purchaseRate: Math.max(Number(itemData.purchase_rate) || 0, 0),
+    bindingCharge: Math.max(Number(itemData.binding_charge) || 0, 0),
     minStock: Math.max(Math.round(Number(itemData.min_stock) || 0), 0),
     hsnCode: itemData.hsn_code || null,
   };
@@ -84,6 +86,7 @@ export class InventoryService {
         stock: true,
         binding: true,
         purchaseRate: true,
+        bindingCharge: true,
         minStock: true,
         damagedStock: true,
         hsnCode: true,
@@ -114,7 +117,7 @@ export class InventoryService {
              "Applicant Type" as "applicantType", "Imprint" as imprint,
              "Publication Date" as "publicationDate",
              price, gst_rate as "gstRate", stock, binding, purchase_rate as "purchaseRate",
-             min_stock as "minStock", damaged_stock as "damagedStock", hsn_code as "hsnCode",
+             binding_charge as "bindingCharge", min_stock as "minStock", damaged_stock as "damagedStock", hsn_code as "hsnCode",
              created_at as "createdAt"
       FROM inventory_items
       WHERE org_id = ${orgId}::uuid
@@ -130,7 +133,7 @@ export class InventoryService {
              "Applicant Type" as "applicantType", "Imprint" as imprint,
              "Publication Date" as "publicationDate",
              price, gst_rate as "gstRate", stock, binding, purchase_rate as "purchaseRate",
-             min_stock as "minStock", damaged_stock as "damagedStock", hsn_code as "hsnCode",
+             binding_charge as "bindingCharge", min_stock as "minStock", damaged_stock as "damagedStock", hsn_code as "hsnCode",
              created_at as "createdAt"
       FROM inventory_items
       WHERE org_id = ${orgId}::uuid

@@ -66,7 +66,7 @@ export class AnalyticsService {
           invoiceItems: {
             select: {
               description: true, quantity: true, amount: true, damagedQty: true, binding: true, itemId: true,
-              inventoryItem: { select: { purchaseRate: true, binding: true } },
+              inventoryItem: { select: { purchaseRate: true, bindingCharge: true, binding: true } },
             },
           },
         },
@@ -134,7 +134,7 @@ export class AnalyticsService {
             const b = bindings.get(bind) ?? { binding: bind, qty: 0, amount: 0 };
             b.qty += qty; b.amount += net;
             bindings.set(bind, b);
-            const rate = Number(line.inventoryItem?.purchaseRate ?? 0);
+            const rate = Number(line.inventoryItem?.purchaseRate ?? 0) + Number(line.inventoryItem?.bindingCharge ?? 0);
             if (line.itemId && rate > 0) {
               marginRevenue += net;
               marginCost += qty * rate;
@@ -153,7 +153,7 @@ export class AnalyticsService {
           c.returns += total;
           customers.set(partyKey, c);
           for (const line of d.invoiceItems) {
-            const rate = Number(line.inventoryItem?.purchaseRate ?? 0);
+            const rate = Number(line.inventoryItem?.purchaseRate ?? 0) + Number(line.inventoryItem?.bindingCharge ?? 0);
             if (line.itemId && rate > 0) {
               marginRevenue -= Number(line.amount) * factor;
               marginCost -= Number(line.quantity) * rate;

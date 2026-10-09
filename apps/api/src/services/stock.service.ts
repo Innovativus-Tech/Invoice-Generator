@@ -25,6 +25,7 @@ interface StockLine {
   unitPrice: Prisma.Decimal | number;
   discountPercent: Prisma.Decimal | number | null;
   damagedQty: Prisma.Decimal | number;
+  bindingCharge?: Prisma.Decimal | number;
 }
 
 export interface MovementInput {
@@ -107,7 +108,7 @@ export class StockService {
       const { qtyChange, damagedChange } = lineStockEffect(doc.docType, Number(line.quantity), Number(line.damagedQty));
       const qty = Number(line.quantity) || 0;
       const rate = qty > 0
-        ? lineAmount({ quantity: qty, unit_price: Number(line.unitPrice), discount_percent: Number(line.discountPercent ?? 0) }) / qty
+        ? lineAmount({ quantity: qty, unit_price: Number(line.unitPrice), discount_percent: Number(line.discountPercent ?? 0), binding_charge: Number(line.bindingCharge ?? 0) }) / qty
         : 0;
       await this.applyMovement(tx, doc.orgId, userId, {
         itemId: line.itemId,
@@ -137,14 +138,14 @@ export class StockService {
         },
       });
       if (newer > 0) continue;
-      const rate = lineAmount({
-        quantity: Number(line.quantity),
-        unit_price: Number(line.unitPrice),
-        discount_percent: Number(line.discountPercent ?? 0),
-      }) / Number(line.quantity);
+      // Book rate and binding charge are kept apart; landed cost = both, net of discount.
+      const disc = 1 - Math.min(Math.max(Number(line.discountPercent ?? 0), 0), 100) / 100;
       await tx.inventoryItem.updateMany({
         where: { id: line.itemId, orgId },
-        data: { purchaseRate: Math.round(rate * 100) / 100 },
+        data: {
+          purchaseRate: Math.round(Number(line.unitPrice) * disc * 100) / 100,
+          bindingCharge: Math.round(Number(line.bindingCharge ?? 0) * disc * 100) / 100,
+        },
       });
     }
   }
@@ -191,6 +192,7 @@ export class StockService {
       binding: item.binding,
       price: item.price,
       purchase_rate: item.purchaseRate,
+      binding_charge: item.bindingCharge,
       stock: item.stock,
       damaged_stock: item.damagedStock,
       min_stock: item.minStock,
@@ -269,7 +271,7 @@ export class StockService {
     const rows = await prisma.$queryRaw<any[]>`
       SELECT id, "Book Title" AS book_title, "ISBN" AS isbn, "Name of Author/Editor" AS author,
              "Name of Publishing Agency/Publisher" AS publisher, binding, price, purchase_rate,
-             stock, damaged_stock, min_stock
+             binding_charge, stock, damaged_stock, min_stock
       FROM inventory_items
       WHERE ${base} ${filterSql}
       ORDER BY ${orderSql}
@@ -281,7 +283,7 @@ export class StockService {
         COUNT(*)::int                                                            AS item_count,
         COALESCE(SUM(GREATEST(COALESCE(stock, 0), 0)), 0)::int                   AS total_qty,
         COALESCE(SUM(damaged_stock), 0)::int                                     AS total_damaged,
-        COALESCE(SUM(GREATEST(COALESCE(stock, 0), 0) * purchase_rate), 0)::float AS value_at_cost,
+        COALESCE(SUM(GREATEST(COALESCE(stock, 0), 0) * (purchase_rate + binding_charge)), 0)::float AS value_at_cost,
         COALESCE(SUM(GREATEST(COALESCE(stock, 0), 0) * COALESCE(price, 0)), 0)::float AS value_at_price,
         COUNT(*) FILTER (WHERE min_stock > 0 AND COALESCE(stock, 0) <= min_stock AND COALESCE(stock, 0) > 0)::int AS low_count,
         COUNT(*) FILTER (WHERE COALESCE(stock, 0) <= 0)::int                     AS out_count,
@@ -320,6 +322,7 @@ function serializeStockRow(r: any) {
   const stock = Number(r.stock ?? 0);
   const minStock = Number(r.min_stock ?? 0);
   const purchaseRate = Number(r.purchase_rate ?? 0);
+  const bindingCharge = Number(r.binding_charge ?? 0);
   const price = Number(r.price ?? 0);
   return {
     id: r.id,
@@ -330,10 +333,12 @@ function serializeStockRow(r: any) {
     binding: r.binding,
     price,
     purchase_rate: purchaseRate,
+    binding_charge: bindingCharge,
+    landed_cost: purchaseRate + bindingCharge,
     stock,
     damaged_stock: Number(r.damaged_stock ?? 0),
     min_stock: minStock,
-    stock_value: Math.max(stock, 0) * purchaseRate,
+    stock_value: Math.max(stock, 0) * (purchaseRate + bindingCharge),
     status: stock <= 0 ? 'out' : minStock > 0 && stock <= minStock ? 'low' : 'ok',
   };
 }

@@ -122,6 +122,7 @@ interface InvoiceItem {
   author?: string | null;
   binding?: string | null;
   damaged_qty?: number | null;
+  binding_charge?: number | null;
 }
 
 interface SerializedItem extends InvoiceItem {
@@ -497,8 +498,14 @@ function gstRowCount(d: InvoiceData) {
 }
 
 /** Number of label/value rows in the last page's totals block (excluding subtotal). */
+/** Binding charges contained in the subtotal (purchase lines), net of line discount. */
+function bindingTotal(d: InvoiceData) {
+  return d.items.reduce((s, i) => s + (Number(i.quantity) || 0) * (Number(i.binding_charge) || 0) * (1 - (Number(i.discount_percent) || 0) / 100), 0);
+}
+
 function totalRowCount(d: InvoiceData) {
   let rows = gstRowCount(d) + 1; // + total
+  if (bindingTotal(d) > 0) rows++;
   if (d.discount_amount > 0) rows += 2; // extra discount + taxable value
   if ((d.postage_charge ?? 0) > 0) rows++;
   if ((d.other_charges ?? 0) > 0) rows++;
@@ -530,7 +537,10 @@ function itemMetaLines(item: InvoiceItem, showBookMetadata?: boolean): string[] 
     if (item.isbn) meta.push(`ISBN: ${item.isbn}`);
     if (item.author) meta.push(`Author: ${item.author}`);
   }
-  if (item.binding) meta.push(`Binding: ${item.binding}`);
+  if (item.binding || (item.binding_charge ?? 0) > 0) {
+    const charge = (item.binding_charge ?? 0) > 0 ? ` @ ${formatIndianCurrency(Number(item.binding_charge))}/copy` : '';
+    meta.push(`Binding: ${item.binding || '—'}${charge}`);
+  }
   if (item.damaged_qty && item.damaged_qty > 0) meta.push(`Damaged: ${item.damaged_qty}`);
   return meta;
 }
@@ -789,6 +799,8 @@ function TotalsBlock({ data }: { data: InvoiceData }) {
   const add = (label: string, value: string, bold = false) =>
     rows.push(React.createElement(TotalRow, { key: label, label, value, bold }));
 
+  const binding = bindingTotal(data);
+  if (binding > 0) add('of which Binding Charges:', formatIndianCurrency(binding));
   if (data.discount_amount > 0) {
     add(
       data.extra_discount_type === 'percent' ? `Extra Discount (${data.extra_discount_value}%):` : 'Extra Discount:',

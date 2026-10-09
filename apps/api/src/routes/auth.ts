@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase.js';
 import { prisma } from '../lib/prisma.js';
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth.middleware.js';
 import { organizationsService } from '../services/organizations.service.js';
+import { devToken, ensureDevUser, isAuthBypassEnabled } from '../lib/dev-auth.js';
 
 const router = Router();
 
@@ -219,6 +220,20 @@ router.post('/login', async (req: Request, res: Response) => {
       res.status(400).json({
         data: null,
         error: { message: 'Email and password are required', code: 'VALIDATION_ERROR' },
+        meta: null,
+      });
+      return;
+    }
+
+    if (isAuthBypassEnabled()) {
+      // Development-only: any email/password logs in (see lib/dev-auth.ts).
+      const dev = await ensureDevUser(email);
+      res.json({
+        data: {
+          user: { id: dev.id, email: dev.email },
+          session: { access_token: devToken(dev.email), refresh_token: null, expires_at: null },
+        },
+        error: null,
         meta: null,
       });
       return;
