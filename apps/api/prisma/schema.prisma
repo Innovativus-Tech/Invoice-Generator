@@ -34,6 +34,7 @@ model Organization {
   numberSeries   NumberSeries[]
   payments       Payment[]
   stockMovements StockMovement[]
+  bindingRates   BindingRate[]
 
   @@map("organizations")
 }
@@ -270,6 +271,7 @@ model InvoiceItem {
   itemId          String?  @map("item_id") @db.Uuid
   binding         String?  @db.Text
   damagedQty      Decimal  @default(0) @map("damaged_qty") @db.Decimal(10, 2)
+  bindingCharge   Decimal  @default(0) @map("binding_charge") @db.Decimal(12, 2)
 
   invoice       Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   organization  Organization?  @relation(fields: [orgId], references: [id])
@@ -329,6 +331,7 @@ model InventoryItem {
   minStock        Int                      @default(0) @map("min_stock")
   damagedStock    Int                      @default(0) @map("damaged_stock")
   hsnCode         String?                  @map("hsn_code") @db.Text
+  bindingCharge   Decimal                  @default(0) @map("binding_charge") @db.Decimal(12, 2)
 
   organization   Organization?   @relation(fields: [orgId], references: [id])
   invoiceItems   InvoiceItem[]
@@ -502,4 +505,23 @@ model StockMovement {
   doc          Invoice?      @relation(fields: [docId], references: [id], onDelete: Cascade)
 
   @@map("stock_movements")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BINDING RATES  (rate card: charge per copy by binding type)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model BindingRate {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId     String   @map("org_id") @db.Uuid
+  name      String   @db.Text
+  charge    Decimal  @default(0) @db.Decimal(12, 2)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, name])
+  @@map("binding_rates")
 }
